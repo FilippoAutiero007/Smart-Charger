@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { SignInScreen } from '../screens/SignInScreen';
 import { SignUpScreen } from '../screens/SignUpScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -16,7 +17,17 @@ export const RootNavigator = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isSignedIn ? <Stack.Screen name="Dashboard" component={DashboardScreen} /> : (<><Stack.Screen name="SignIn" component={SignInScreen} /><Stack.Screen name="SignUp" component={SignUpScreen} /></>)}
+        {isSignedIn ? (
+          <>
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="SignIn" component={SignInScreen} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -1,9 +1,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { AuthTokens, SonoffDevice } from '../types';
 
 const APP_ID = "lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo";
-const APP_SECRET = "mdPR25XfesDAiaB3pQbxWEklWT1EeK7v"; // Consider moving to .env later
+const APP_SECRET = "mdPR25XfesDAiaB3pQbxWEklWT1EeK7v";
 
 let currentRegion = 'eu';
 let baseUrl = `https://${currentRegion}-apia.coolkit.cc`;
@@ -54,17 +53,15 @@ api.interceptors.response.use(
                 });
 
                 if (response.data.error === 0) {
-                    const { accessToken, refreshToken: newRefreshToken, atExpiredTime, rtExpiredTime } = response.data.data;
+                    const { accessToken, refreshToken: newRefreshToken } = response.data.data;
 
                     await SecureStore.setItemAsync('access_token', accessToken);
                     await SecureStore.setItemAsync('refresh_token', newRefreshToken);
-                    // Store other times if needed
 
                     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                     return api(originalRequest);
                 }
             } catch (refreshError) {
-                // Handle refresh failure (logout user)
                 console.error('Token refresh failed', refreshError);
                 return Promise.reject(refreshError);
             }
@@ -72,6 +69,14 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+export interface SonoffDevice {
+    id: string;
+    name: string;
+    online: boolean;
+    brand: string;
+    type: string;
+}
 
 export const SonoffService = {
     setRegion: (region: string) => updateBaseUrl(region),
