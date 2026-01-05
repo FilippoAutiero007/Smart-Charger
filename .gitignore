@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Environment & Sensitive Info
+.env
+.env.local
+.env.*
+*.keystore
+client_secret*.json
+google-services.json
+key_output.txt
+
+# Build Artifacts
+dist/
+build/
+.expo/
+.next/
+.turbo/
+out/
+
+# Logs & Local Data
+*.log
+laptop-agent/logs/
+laptop-agent/data/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+theme_settings.json
