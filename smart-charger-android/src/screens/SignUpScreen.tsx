@@ -14,7 +14,7 @@ export const SignUpScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
 
   const onSignUp = async () => {
-    if (!isSignUpLoaded) return;
+    if (!isSignUpLoaded || !signUp) return;
     if (!email || !password) {
       Alert.alert('Errore', 'Inserisci email e password');
       return;
@@ -33,7 +33,7 @@ export const SignUpScreen = ({ navigation }: any) => {
   };
 
   const onVerify = async () => {
-    if (!isSignUpLoaded) return;
+    if (!isSignUpLoaded || !signUp) return;
     if (!code) {
       Alert.alert('Errore', 'Inserisci il codice di verifica');
       return;
@@ -42,8 +42,8 @@ export const SignUpScreen = ({ navigation }: any) => {
     setLoading(true);
     try {
       const result = await signUp.attemptEmailAddressVerification({ code });
-      if (result.status === 'complete') {
-        await setSignUpActive({ session: result.createdSessionId });
+      if (result.status === 'complete' && result.createdSessionId) {
+        await setSignUpActive?.({ session: result.createdSessionId });
       } else {
         console.warn('Verification status not complete:', result.status);
       }

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "smart-charger-android",
+    "name": "Smart Charger",
     "slug": "smart-charger-android",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,22 +10,57 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#667eea"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.smartcharger.app"
     },
     "android": {
+      "package": "com.smartcharger.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#667eea"
       },
+      "permissions": [
+        "BATTERY_STATS",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "VIBRATE",
+        "POST_NOTIFICATIONS",
+        "FOREGROUND_SERVICE",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {}
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#667eea",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "smart-charger-project"
+      }
+    }
   }
 }

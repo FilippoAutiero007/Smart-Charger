@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'rea
 import { useUser, useAuth } from '@clerk/clerk-expo';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { AppleButton } from '../components/AppleButton';
+import { BaseButton } from '../components/BaseButton';
 import theme from '../theme/theme';
 import { RootStackParamList } from '../types';
 
@@ -60,7 +60,7 @@ export const ProfileScreen = ({ navigation }: Props) => {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Actions</Text>
                 <View style={{ marginBottom: theme.spacing.sm }}>
-                    <AppleButton
+                    <BaseButton
                         title="Sign Out"
                         onPress={() => signOut()}
                         variant="outline"

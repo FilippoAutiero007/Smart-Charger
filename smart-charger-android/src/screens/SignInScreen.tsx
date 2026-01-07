@@ -12,7 +12,7 @@ export const SignInScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
 
   const onSignIn = async () => {
-    if (!isSignInLoaded) return;
+    if (!isSignInLoaded || !signIn) return;
     if (!email || !password) {
       Alert.alert('Errore', 'Inserisci email e password');
       return;
@@ -21,8 +21,8 @@ export const SignInScreen = ({ navigation }: any) => {
     setLoading(true);
     try {
       const result = await signIn.create({ identifier: email, password });
-      if (result.status === 'complete') {
-        await setSignInActive({ session: result.createdSessionId });
+      if (result.status === 'complete' && result.createdSessionId) {
+        await setSignInActive?.({ session: result.createdSessionId });
       } else {
         console.warn('Sign in status not complete:', result.status);
       }
