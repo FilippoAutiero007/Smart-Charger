@@ -2,9 +2,10 @@ import React from 'react';
 import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from './src/services/tokenCache';
 import { RootNavigator } from './src/navigation';
+import Constants from 'expo-constants';
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-if (!publishableKey) throw new Error('Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in .env.local');
+const publishableKey = Constants.expoConfig?.extra?.clerkPublishableKey;
+if (!publishableKey) throw new Error('Missing Clerk publishable key in expoConfig.extra');
 
 export default function App() {
   return (
