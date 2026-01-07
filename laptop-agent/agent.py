@@ -1,12 +1,12 @@
 import time
 import sys
 import os
-from modules.utils import logger, shutdown_event, APP_ID, APP_SECRET
-from modules.sonoff_controller import SonoffController
-from modules.battery_monitor import BatteryMonitor
+from core.utils import logger, APP_ID, APP_SECRET
+from services.sonoff_controller import SonoffController
+from core.battery_monitor import BatteryMonitor
 
-# Configuration
-CONFIG = {
+# Configurazione predefinita
+DEFAULT_CONFIG = {
     "min_battery": 20,
     "max_battery": 80,
     "check_interval": 30,
@@ -14,45 +14,44 @@ CONFIG = {
 }
 
 def main():
-    print("\n🔋 SMART CHARGER - LAPTOP AGENT")
+    print("\n🔋 SMART CHARGER - AGENTE LAPTOP")
     print("===============================")
     
-    # 1. Initialize Controller
+    # 1. Inizializzazione Controller
     controller = SonoffController(APP_ID, APP_SECRET)
     
-    # 2. Check Tokens or Refresh
+    # 2. Verifica Token
     if not controller.access_token:
-        print("\n❌ No tokens found.")
-        print("💡 Please run 'python setup.py' to log in.")
+        print("\n❌ Token non trovati.")
+        print("💡 Esegui 'python setup.py' per effettuare l'accesso.")
         return
-    elif not controller.refresh_access_token():
-         print("\n❌ Token expired and refresh failed.")
-         print("💡 Please run 'python setup.py' to log in again.")
+    
+    if not controller.refresh_access_token():
+         print("\n❌ Token scaduti e aggiornamento fallito.")
+         print("💡 Esegui 'python setup.py' per accedere di nuovo.")
          return
 
-    # 3. Select Device (if not cached or config)
-    # Ideally reuse last used device or ask user
-    # For now, let's list devices and pick first one if not set
+    # 3. Selezione Dispositivo
     if not controller.device_id:
-        print("\nFetching devices...")
+        print("\nRecupero dispositivi...")
         devices = controller.get_all_devices()
         if not devices:
-            print("No devices found.")
+            print("Nessun dispositivo trovato.")
             return
         
-        # Simple selection: Pick the first one for now or ask user
-        # Let's try to load from config if we had one.
-        # But for this simple script, let's just pick the first one and notify.
+        # Selezione automatica del primo dispositivo disponibile
         device = devices[0]
         controller.set_device_id(device["id"], device["name"])
-        CONFIG["device_id"] = device["id"]
-        print(f"Selected Device: {device['name']} ({device['id']})")
+        print(f"Dispositivo Selezionato: {device['name']} ({device['id']})")
     
-    # 4. Start Monitor
+    # 4. Avvio Monitoraggio
     try:
-        BatteryMonitor.start_monitoring(controller, CONFIG)
+        print(f"Monitoraggio avviato (Soglie: {DEFAULT_CONFIG['min_battery']}% - {DEFAULT_CONFIG['max_battery']}%)")
+        BatteryMonitor.start_monitoring(controller, DEFAULT_CONFIG)
     except KeyboardInterrupt:
-        print("\nStopped.")
+        print("\nMonitoraggio interrotto dall'utente.")
+    except Exception as e:
+        print(f"\n❌ Errore durante il monitoraggio: {e}")
 
 if __name__ == "__main__":
     main()

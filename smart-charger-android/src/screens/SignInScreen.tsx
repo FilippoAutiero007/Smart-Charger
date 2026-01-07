@@ -1,43 +1,93 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
-import { useSignIn } from '@clerk/clerk-expo';
-import { AppleInput } from '../components/AppleInput';
-import { AppleButton } from '../components/AppleButton';
+import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useAuthManager } from '../hooks/useAuthManager';
+import { BaseInput } from '../components/BaseInput';
+import { BaseButton } from '../components/BaseButton';
 import theme from '../theme/theme';
 
 export const SignInScreen = ({ navigation }: any) => {
-  const { signIn, setActive, isLoaded } = useSignIn();
+  const { signIn, setSignInActive, isSignInLoaded } = useAuthManager();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const onSignIn = async () => {
-    if (!isLoaded) return;
+    if (!isSignInLoaded) return;
+    if (!email || !password) {
+      Alert.alert('Errore', 'Inserisci email e password');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await signIn.create({ identifier: email, password });
-      await setActive({ session: result.createdSessionId });
+      if (result.status === 'complete') {
+        await setSignInActive({ session: result.createdSessionId });
+      } else {
+        console.warn('Sign in status not complete:', result.status);
+      }
     } catch (err: any) {
-      Alert.alert('Error', err.errors?.[0]?.message || 'Sign in failed');
+      Alert.alert('Errore di Accesso', err.errors?.[0]?.message || 'Accesso fallito');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome Back</Text>
-      <Text style={styles.subtitle}>Sign in to continue</Text>
-      <AppleInput label="Email" placeholder="your@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-      <AppleInput label="Password" placeholder="Enter password" value={password} onChangeText={setPassword} secureTextEntry />
-      <AppleButton title="Sign In" onPress={onSignIn} loading={loading} />
-      <AppleButton title="Create Account" onPress={() => navigation.navigate('SignUp')} variant="outline" />
-    </View>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Bentornato</Text>
+          <Text style={styles.subtitle}>Accedi per gestire la tua ricarica</Text>
+        </View>
+
+        <View style={styles.form}>
+          <BaseInput 
+            label="Email" 
+            placeholder="esempio@email.it" 
+            value={email} 
+            onChangeText={setEmail} 
+            keyboardType="email-address" 
+            autoCapitalize="none" 
+          />
+          <BaseInput 
+            label="Password" 
+            placeholder="Inserisci la tua password" 
+            value={password} 
+            onChangeText={setPassword} 
+            secureTextEntry 
+          />
+          
+          <BaseButton 
+            title="Accedi" 
+            onPress={onSignIn} 
+            loading={loading} 
+          />
+          
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Non hai un account?</Text>
+            <BaseButton 
+              title="Registrati" 
+              onPress={() => navigation.navigate('SignUp')} 
+              variant="outline" 
+            />
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: '#FFF' },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: theme.spacing.sm, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#8E8E93', marginBottom: theme.spacing.xl, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: '#FFF' },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: theme.spacing.xl },
+  header: { marginBottom: theme.spacing.xl, alignItems: 'center' },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#1C1C1E', marginBottom: theme.spacing.xs },
+  subtitle: { fontSize: 16, color: '#8E8E93', textAlign: 'center' },
+  form: { width: '100%' },
+  footer: { marginTop: theme.spacing.xl, alignItems: 'center' },
+  footerText: { fontSize: 14, color: '#8E8E93', marginBottom: theme.spacing.xs },
 });
