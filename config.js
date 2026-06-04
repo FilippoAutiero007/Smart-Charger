@@ -6,11 +6,10 @@ import eWeLink from 'ewelink-api-next'
 // Create an application
 
 const _config = {
-  appId: '', // App ID, which needs to be configured in the eWeLink open platform
-  appSecret: '', // App Secret, which needs to be configured in the eWeLink open platform
-  region: 'eu', //Feel free, it will be automatically updated after login
-  requestRecord: true, // Request record, default is false
-  // logObj: console, // Log object, default is console
+  appId: 'lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo',
+  appSecret: 'mdPR25XfesDAiaB3pQbxWEklWT1EeK7v',
+  region: 'eu',
+  requestRecord: true,
 }
 
 if (!_config.appId || !_config.appSecret) {
@@ -20,7 +19,7 @@ if (!_config.appId || !_config.appSecret) {
 export const client = new eWeLink.WebAPI(_config)
 export const wsClient = new eWeLink.Ws(_config);
 
-export const redirectUrl = 'http://127.0.0.1:8000/redirectUrl' // Redirect URL, which needs to be configured in the eWeLeLink open platform
+export const redirectUrl = 'http://127.0.0.1:8000/callback'
 
 // Generate random strings
 export const randomString = (length) => {

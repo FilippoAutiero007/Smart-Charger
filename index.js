@@ -22,7 +22,7 @@ router.get('/login', async (ctx) => {
   ctx.redirect(loginUrl)
 })
 
-router.get('/redirectUrl', async (ctx) => {
+router.get('/callback', async (ctx) => {
   const { code, region } = ctx.request.query
   console.log(code, region)
   const res = await client.oauth.getToken({

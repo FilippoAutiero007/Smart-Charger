@@ -1,13 +1,11 @@
 {
   "name": "ewelinkoauthlogindemo",
   "version": "1.0.0",
-  "description": "",
-  "module": "esm",
+  "description": "eWeLink OAuth login demo server",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node --experimental-modules index.js"
+    "start": "node index.js"
   },
   "author": "nocmt",
   "license": "ISC",

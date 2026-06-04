@@ -132,3 +132,8 @@ dist
 token.json
 .DS_Store
 .idea
+*.apk
+*.jks
+*.keystore
+.gradle/
+local.properties

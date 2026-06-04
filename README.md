@@ -1,70 +1,90 @@
-## eWelink Developer Platform Application to Become a Developer and Create Application Tutorials
+# Smart Charger
 
-### 1. Login/Register
+Controllo automatico di dispositivi Sonoff basato sulla percentuale della batteria del telefono.
 
-Vist https://dev.ewelink.cc/ you need to login/register for an eWelink account to access the eWelink Developer Platform. You can click 'Get started' or 'Login/Register' button on the page, if you don't have an eWelink account click Create account to register and login, if you have an existing eWelink account enter your account password to login.
+## Installazione rapida
 
-![home](./imgs/home.png)
+Scarica l'ultima release APK dalla sezione [Releases](https://github.com/FilippoAutiero007/Smart-Charger/releases) e installala sul tuo dispositivo Android.
 
-### 2. Apply for Developer Portal
-
-After logging in successfully, you will go to My center page and click 'Apply now' to apply as a developer.
-
-![entrance](./imgs/entrance.png)
-
-### 3. Fill in the application information
-
-Select your account type as Individual Developers or Enterprise Developers. According to the type of choice to fill out the corresponding form information to submit, thought the individual developers form, after submission you will receive the audit results within 1-2 working days by e-mail, at the same time you can also in the eWelink developer platform to view the certification status of the developer application.
-
-![personal_form](./imgs/personal_form.png)
-
-### 4. Creating an Application
-
-After authentication you can create your App on the Console page by clicking the 'Create' button in the upper right corner.
-
-If you want to test this project, the Redirect URL needs to be filled in as: http://127.0.0.1:8000/redirectUrl
-
-![create_entrance1](./imgs/create_entrance1.png)
-
-### 5. Fill in the application configuration
-
-Click the 'Create' button and follow the page prompts to configure your APP information, fill in and click OK to save.
-
-![create_form](./imgs/create_form.png)
-
-### 6. APP List
-
-After the APP application is saved successfully, APP List will appear the page as shown in the figure Create APP application is complete, you can see the information about the application you created, and it also supports viewing, editing, and deleting the application operation.
-
-![applist](./imgs/applist.png)
-
-## Usage of this project
-
-### 1. Modifying Configuration Files config.js
-
-You should go https://dev.ewelink.cc/ Register an account, then create an application, obtain your own APP ID and APP Secret, and fill them in config.js.
-![](./imgs/ViewAPP.png)
-
-### 2. Installation dependencies
+## Architettura
 
 ```
-npm i
+Smart-Charger/
+├── auth-server/          # Backend per login automatico via email (Node.js + Express)
+├── monitor-batteria/     # App Android VoltGuard Pro (Kotlin + Jetpack Compose)
+├── index.js              # Server OAuth locale (Koa + eWeLink API)
+├── config.js             # Configurazione eWeLink
+├── sonoffControl.js      # CLI per controllo manuale Sonoff
+└── README.md
 ```
 
-### 3. Run the project:
+## Come funziona
 
-```
-npm run start
+L'app Android **VoltGuard Pro** monitora la batteria del telefono e comanda un dispositivo Sonoff in base a soglie configurabili:
+
+- **Batteria ≤ soglia ON** → Sonoff si **ACCENDE**
+- **Batteria ≥ soglia OFF** → Sonoff si **SPEGNE**
+
+Utile per caricabatterie smart, power bank, o qualsiasi dispositivo vada attivato in base al livello della batteria.
+
+## Configurazione rapida (via email)
+
+1. Avvia il server di autenticazione (su Render o locale)
+2. Nell'app: **Opzioni → Controllo Sonoff → Configurazione Automatica via Email**
+3. Inserisci la tua email → ricevi un link di login
+4. Clicca il link, autorizza l'app, ti verrà mostrato un codice a 5 cifre
+5. Inserisci il codice nell'app → tutto configurato automaticamente
+
+## Configurazione manuale
+
+1. Esegui `npm install` poi `npm start` in questa cartella
+2. Apri `http://localhost:8000/login` nel browser
+3. Fai login con le credenziali eWeLink
+4. I token vengono salvati in `token.json`
+5. Copia `accessToken` e `refreshToken` nell'app (Opzioni → Controllo Sonoff)
+6. Inserisci l'ID del dispositivo Sonoff e le soglie
+
+## Deploy del server di autenticazione
+
+Il server `auth-server/` può essere deployato su [Render.com](https://render.com) (piano free):
+
+1. Connetti il repository a Render
+2. Crea un **Web Service**
+3. Imposta:
+   - **Root Directory**: `auth-server`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+4. Aggiungi le variabili d'ambiente (vedi `auth-server/.env.example`)
+5. Deploy
+
+### Variabili d'ambiente richieste
+
+| Variabile | Descrizione |
+|-----------|-------------|
+| `APP_ID` | App ID da https://dev.ewelink.cc |
+| `APP_SECRET` | App Secret da https://dev.ewelink.cc |
+| `RESEND_API_KEY` | API key di Resend per l'invio email |
+| `BASE_URL` | URL pubblico del server (es. https://tuo-app.onrender.com) |
+| `FROM_EMAIL` | Mittente email (es. onboarding@resend.dev) |
+
+## Build APK (sviluppatori)
+
+```bash
+cd monitor-batteria
+./gradlew assembleDebug
 ```
 
-### 4. Log in to your own account:
+L'APK si trova in `app/build/outputs/apk/debug/app-debug.apk`.
 
-```
-Login URL: http://127.0.0.1:8000/login
-```
+## Requisiti
 
-### 5. control Devices Example:
+- **Android**: minSdk 24, targetSdk 36
+- **Node.js**: versione 20.x per il server locale
+- **eWeLink**: account developer su https://dev.ewelink.cc con un'applicazione registrata
 
-```
-node controlDeviceDemo.js
-```
+## Credenziali
+
+Per ottenere `APP_ID` e `APP_SECRET`:
+1. Vai su https://dev.ewelink.cc e fai login
+2. Crea un'applicazione (tipo: Android)
+3. Ottieni le credenziali nella pagina dell'app

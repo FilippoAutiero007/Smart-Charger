@@ -1,0 +1,6 @@
+{
+  "name": "VoltGuard Pro",
+  "description": "Un'applicazione che monitora lo stato della batteria in tempo reale e invia notifiche in background quando scende sotto una soglia personalizzata.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
