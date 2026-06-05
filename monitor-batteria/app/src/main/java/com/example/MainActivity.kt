@@ -968,7 +968,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.Home,
                         contentDescription = "Stato",
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 },
                 label = {
@@ -976,7 +976,7 @@ fun BatteryMonitorContent(
                         text = "Stato",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (activeTab == "stato") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 12.sp
+                            fontSize = 13.sp
                         )
                     )
                 },
@@ -996,7 +996,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.List,
                         contentDescription = "Grafici",
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 },
                 label = {
@@ -1004,7 +1004,7 @@ fun BatteryMonitorContent(
                         text = "Grafici",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (activeTab == "grafici") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 12.sp
+                            fontSize = 13.sp
                         )
                     )
                 },
@@ -1024,7 +1024,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Opzioni",
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 },
                 label = {
@@ -1032,7 +1032,7 @@ fun BatteryMonitorContent(
                         text = "Opzioni",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (activeTab == "opzioni") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 12.sp
+                            fontSize = 13.sp
                         )
                     )
                 },
@@ -1593,6 +1593,7 @@ fun SonoffSettingsSection() {
     var deviceList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var deviceDropdownExpanded by remember { mutableStateOf(false) }
     var loadingDevices by remember { mutableStateOf(false) }
+    var deviceLoadError by remember { mutableStateOf("") }
 
     LaunchedEffect(enabled) { sonoffPrefs.edit().putBoolean(SonoffController.KEY_ENABLED, enabled).apply() }
     LaunchedEffect(deviceId) { sonoffPrefs.edit().putString(SonoffController.KEY_DEVICE_ID, deviceId).apply() }
@@ -1606,6 +1607,23 @@ fun SonoffSettingsSection() {
         while (true) {
             lastStatus = sonoffPrefs.getString(SonoffController.KEY_LAST_STATUS, "In attesa") ?: "In attesa"
             delay(2000)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val savedList = sonoffPrefs.getString(SonoffController.KEY_DEVICE_LIST, "") ?: ""
+        if (savedList.isNotEmpty() && deviceList.isEmpty()) {
+            try {
+                val arr = org.json.JSONArray(savedList)
+                val list = mutableListOf<Pair<String, String>>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val id = obj.optString("deviceid", "")
+                    val name = obj.optString("name", "Senza nome")
+                    if (id.isNotEmpty()) list.add(name to id)
+                }
+                deviceList = list
+            } catch (_: Exception) {}
         }
     }
 
@@ -1858,6 +1876,7 @@ fun SonoffSettingsSection() {
                         Button(
                             onClick = {
                                 loadingDevices = true
+                                deviceLoadError = ""
                                 Thread {
                                     try {
                                         val client = OkHttpClient()
@@ -1874,14 +1893,17 @@ fun SonoffSettingsSection() {
                                             val name = obj.optString("name", "Senza nome")
                                             if (id.isNotEmpty()) list.add(name to id)
                                         }
+                                        sonoffPrefs.edit().putString(SonoffController.KEY_DEVICE_LIST, body).apply()
                                         Handler(Looper.getMainLooper()).post {
                                             deviceList = list
                                             loadingDevices = false
                                             deviceDropdownExpanded = list.isNotEmpty()
+                                            if (list.isEmpty()) deviceLoadError = "Nessun dispositivo trovato"
                                         }
                                     } catch (e: Exception) {
                                         Handler(Looper.getMainLooper()).post {
                                             loadingDevices = false
+                                            deviceLoadError = "Errore: ${e.message}"
                                         }
                                     }
                                 }.start()
@@ -1893,7 +1915,7 @@ fun SonoffSettingsSection() {
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.height(56.dp)
                         ) {
-                            Text(if (loadingDevices) "Caricamento..." else "Carica Dispositivi", fontSize = 12.sp)
+                            Text(if (loadingDevices) "..." else "Carica", fontSize = 12.sp)
                         }
 
                         ExposedDropdownMenuBox(
@@ -1919,9 +1941,16 @@ fun SonoffSettingsSection() {
                                 expanded = deviceDropdownExpanded,
                                 onDismissRequest = { deviceDropdownExpanded = false }
                             ) {
+                                if (deviceList.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("Nessun dispositivo. Tocca Carica.") },
+                                        onClick = { deviceDropdownExpanded = false },
+                                        enabled = false
+                                    )
+                                }
                                 deviceList.forEach { (name, id) ->
                                     DropdownMenuItem(
-                                        text = { Text("$name ($id)") },
+                                        text = { Text("$name  •  $id", fontSize = 13.sp) },
                                         onClick = {
                                             deviceId = id
                                             deviceDropdownExpanded = false
@@ -1930,6 +1959,14 @@ fun SonoffSettingsSection() {
                                 }
                             }
                         }
+                    }
+
+                    if (deviceLoadError.isNotBlank()) {
+                        Text(
+                            text = deviceLoadError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = com.example.ui.theme.RedAlert
+                        )
                     }
 
                     Row(
@@ -2207,6 +2244,51 @@ fun SonoffSettingsSection() {
                         color = com.example.ui.theme.TextTertiary,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                onThreshold = 20
+                                offThreshold = 80
+                                sonoffPrefs.edit()
+                                    .putInt(SonoffController.KEY_ON_THRESHOLD, 20)
+                                    .putInt(SonoffController.KEY_OFF_THRESHOLD, 80)
+                                    .apply()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = com.example.ui.theme.TextSecondary
+                            )
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Reset 20/80", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                sonoffPrefs.edit()
+                                    .putInt(SonoffController.KEY_ON_THRESHOLD, onThreshold)
+                                    .putInt(SonoffController.KEY_OFF_THRESHOLD, offThreshold)
+                                    .apply()
+                                Toast.makeText(context, "Soglie salvate: ${onThreshold}% / ${offThreshold}%", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = com.example.ui.theme.ElegantPurple
+                            )
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Salva", fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }
