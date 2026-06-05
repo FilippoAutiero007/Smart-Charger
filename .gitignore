@@ -137,3 +137,5 @@ token.json
 *.keystore
 .gradle/
 local.properties
+test-*.mjs
+test-*.js
