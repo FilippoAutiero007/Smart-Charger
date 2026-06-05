@@ -209,9 +209,8 @@ app.get('/devices', async (req, res) => {
       appId: APP_ID,
       appSecret: APP_SECRET,
       region: region || 'eu',
-      requestRecord: true,
-      accessToken,
     })
+    userApi.at = accessToken
 
     const result = await userApi.device.getAllThings()
     const things = result?.data?.thingList || []
