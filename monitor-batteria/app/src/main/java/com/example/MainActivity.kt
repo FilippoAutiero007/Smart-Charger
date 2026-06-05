@@ -85,6 +85,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.delay
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.example.battery.SonoffController
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -92,6 +94,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import org.json.JSONArray
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity() {
 
@@ -138,19 +142,33 @@ class MainActivity : ComponentActivity() {
                 val onThreshold = sonoffPrefs.getInt(SonoffController.KEY_ON_THRESHOLD, 30)
                 val offThreshold = sonoffPrefs.getInt(SonoffController.KEY_OFF_THRESHOLD, 80)
                 val lastCommand = sonoffPrefs.getString(SonoffController.KEY_LAST_COMMAND, "") ?: ""
+                val atLen = sonoffPrefs.getString(SonoffController.KEY_ACCESS_TOKEN, "")?.length ?: 0
+
+                Log.d("MainActivity", "realtime-sonoff: battery=${state.percentage}%, on<=$onThreshold%, off>=$offThreshold%, lastCommand=$lastCommand, deviceId=$deviceId, atLen=$atLen, charging=${state.isCharging}")
 
                 if (deviceId.isNotEmpty()) {
                     Thread {
                         try {
                             val controller = SonoffController(context)
                             when {
-                                state.percentage >= offThreshold && lastCommand != "off" -> controller.turnOff(deviceId)
-                                state.percentage <= onThreshold && lastCommand != "on" -> controller.turnOn(deviceId)
+                                state.percentage >= offThreshold -> {
+                                    Log.d("MainActivity", "realtime-sonoff: DECISION OFF (battery ${state.percentage}% >= $offThreshold%, lastCommand era '$lastCommand')")
+                                    controller.turnOff(deviceId)
+                                }
+                                state.percentage <= onThreshold -> {
+                                    Log.d("MainActivity", "realtime-sonoff: DECISION ON (battery ${state.percentage}% <= $onThreshold%, lastCommand era '$lastCommand')")
+                                    controller.turnOn(deviceId)
+                                }
+                                else -> {
+                                    Log.d("MainActivity", "realtime-sonoff: nessuna azione (zona morta)")
+                                }
                             }
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Errore Sonoff real-time", e)
                         }
                     }.start()
+                } else {
+                    Log.d("MainActivity", "realtime-sonoff: deviceId vuoto, SKIP")
                 }
             }
         }
@@ -2289,10 +2307,123 @@ fun SonoffSettingsSection() {
                             Text("Salva", fontSize = 12.sp)
                         }
                     }
+
+                    OutlinedButton(
+                        onClick = { shareDiagnosticLog(context) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = com.example.ui.theme.TextSecondary
+                        )
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Invia log diagnostici", fontSize = 12.sp)
+                    }
                 }
             }
         }
     }
 }
+
+private fun shareDiagnosticLog(context: Context) {
+    try {
+        val sonoffPrefs = context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
+        val batteryPrefs = context.getSharedPreferences(BatteryCheckWorker.PREFS_NAME, Context.MODE_PRIVATE)
+
+        val deviceId = sonoffPrefs.getString(SonoffController.KEY_DEVICE_ID, "") ?: ""
+        val accessToken = sonoffPrefs.getString(SonoffController.KEY_ACCESS_TOKEN, "") ?: ""
+        val refreshToken = sonoffPrefs.getString(SonoffController.KEY_REFRESH_TOKEN, "") ?: ""
+        val atExpiry = sonoffPrefs.getLong(SonoffController.KEY_AT_EXPIRY, 0)
+        val rtExpiry = sonoffPrefs.getLong(SonoffController.KEY_RT_EXPIRY, 0)
+        val enabled = sonoffPrefs.getBoolean(SonoffController.KEY_ENABLED, false)
+        val onThreshold = sonoffPrefs.getInt(SonoffController.KEY_ON_THRESHOLD, -1)
+        val offThreshold = sonoffPrefs.getInt(SonoffController.KEY_OFF_THRESHOLD, -1)
+        val lastCommand = sonoffPrefs.getString(SonoffController.KEY_LAST_COMMAND, "") ?: ""
+        val lastStatus = sonoffPrefs.getString(SonoffController.KEY_LAST_STATUS, "") ?: ""
+        val region = sonoffPrefs.getString(SonoffController.KEY_REGION, "eu") ?: "eu"
+
+        val batteryThreshold = batteryPrefs.getInt(BatteryCheckWorker.KEY_THRESHOLD, -1)
+        val batteryEnabled = batteryPrefs.getBoolean(BatteryCheckWorker.KEY_ENABLED, true)
+
+        val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        val versionName = pkgInfo.versionName ?: "?"
+        val versionCode = pkgInfo.longVersionCode
+        val androidVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
+        val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ITALY).format(Date())
+        val now = System.currentTimeMillis()
+
+        val sb = StringBuilder()
+        sb.appendLine("=== SmartCharger v$versionName ($versionCode) - LOG DIAGNOSTICO ===")
+        sb.appendLine("Generato: $timestamp")
+        sb.appendLine("")
+        sb.appendLine("--- DISPOSITIVO ---")
+        sb.appendLine("Marca/Modello: $deviceModel")
+        sb.appendLine("OS: $androidVersion")
+        sb.appendLine("Package: ${context.packageName}")
+        sb.appendLine("")
+        sb.appendLine("--- CONFIG SONOFF ---")
+        sb.appendLine("Abilitato: $enabled")
+        sb.appendLine("Device ID: $deviceId")
+        sb.appendLine("Regione: $region")
+        sb.appendLine("Soglia ON (≤): $onThreshold%")
+        sb.appendLine("Soglia OFF (≥): $offThreshold%")
+        sb.appendLine("Ultimo comando inviato: '${lastCommand}'")
+        sb.appendLine("Ultimo status: '$lastStatus'")
+        sb.appendLine("Access Token presente: ${accessToken.isNotEmpty()} (len=${accessToken.length})")
+        sb.appendLine("Refresh Token presente: ${refreshToken.isNotEmpty()} (len=${refreshToken.length})")
+        sb.appendLine("AT expiry: $atExpiry (${if (atExpiry > now) "VALIDO per ${(atExpiry - now) / 60000} min" else "SCADUTO"})")
+        sb.appendLine("RT expiry: $rtExpiry (${if (rtExpiry > now) "VALIDO per ${(rtExpiry - now) / 60000} min" else "SCADUTO"})")
+        sb.appendLine("")
+        sb.appendLine("--- CONFIG BATTERIA ---")
+        sb.appendLine("Notifiche abilitate: $batteryEnabled")
+        sb.appendLine("Soglia notifica: $batteryThreshold%")
+        sb.appendLine("")
+        sb.appendLine("--- WORKMANAGER ---")
+        val wm = WorkManager.getInstance(context)
+        val workInfoList = wm.getWorkInfosForUniqueWork("BatteryMonitorWork").get()
+        if (workInfoList != null && workInfoList.isNotEmpty()) {
+            for (info in workInfoList) {
+                sb.appendLine("Nome: ${info.tags}")
+                sb.appendLine("Stato: ${info.state}")
+                sb.appendLine("RunAttemptCount: ${info.runAttemptCount}")
+                sb.appendLine("")
+            }
+        } else {
+            sb.appendLine("NESSUN WORK REGISTRATO CON TAG 'BatteryMonitorWork'")
+            sb.appendLine("(WorkManager non ha mai schedulato il worker — apri l'app almeno una volta)")
+            sb.appendLine("")
+        }
+        sb.appendLine("--- ISTRUZIONI ---")
+        sb.appendLine("1. Installa questa versione (v$versionName)")
+        sb.appendLine("2. Lascia il telefono in carica fino a superare la soglia OFF")
+        sb.appendLine("3. Se il Sonoff non si spegne automaticamente, apri l'app e tocca di nuovo 'Invia log diagnostici'")
+        sb.appendLine("4. Invia il file .txt generato allo sviluppatore")
+
+        val logDir = File(context.getExternalFilesDir(null), "logs")
+        if (!logDir.exists()) logDir.mkdirs()
+        val logFile = File(logDir, "diagnostic_${System.currentTimeMillis()}.txt")
+        FileOutputStream(logFile).use { it.write(sb.toString().toByteArray(Charsets.UTF_8)) }
+
+        val uri: Uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            logFile
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "SmartCharger v$versionName - Log diagnostico")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Invia log diagnostico"))
+    } catch (e: Exception) {
+        Log.e("MainActivity", "Errore generazione log diagnostico", e)
+        Toast.makeText(context, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
 
 

@@ -103,11 +103,14 @@ class BatteryCheckWorker(
     private fun handleSonoffControl(batteryPercentage: Int) {
         val sharedPrefs = context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
         val sonoffEnabled = sharedPrefs.getBoolean(SonoffController.KEY_ENABLED, false)
-        if (!sonoffEnabled) return
+        if (!sonoffEnabled) {
+            Log.d(TAG, "handleSonoffControl: sonoffEnabled=false, SKIP")
+            return
+        }
 
         val deviceId = sharedPrefs.getString(SonoffController.KEY_DEVICE_ID, "") ?: ""
         if (deviceId.isEmpty()) {
-            Log.d(TAG, "Sonoff: ID dispositivo non impostato")
+            Log.d(TAG, "handleSonoffControl: deviceId vuoto, SKIP")
             return
         }
 
@@ -115,27 +118,27 @@ class BatteryCheckWorker(
         val offThreshold = sharedPrefs.getInt(SonoffController.KEY_OFF_THRESHOLD, 80)
         val lastCommand = sharedPrefs.getString(SonoffController.KEY_LAST_COMMAND, "") ?: ""
         val accessToken = sharedPrefs.getString(SonoffController.KEY_ACCESS_TOKEN, "") ?: ""
+        val region = sharedPrefs.getString(SonoffController.KEY_REGION, "eu") ?: "eu"
         if (accessToken.isEmpty()) {
-            Log.d(TAG, "Sonoff: token non impostato")
+            Log.d(TAG, "handleSonoffControl: accessToken vuoto, SKIP")
             return
         }
 
         val controller = SonoffController(context)
 
-        Log.d(TAG, "Sonoff: batteria=$batteryPercentage%, on≤${onThreshold}%, off≥${offThreshold}%, ultimo=$lastCommand")
+        Log.d(TAG, "handleSonoffControl START: battery=$batteryPercentage%, on<=$onThreshold%, off>=$offThreshold%, lastCommand=$lastCommand, deviceId=$deviceId, region=$region, atLen=${accessToken.length}")
 
         when {
             batteryPercentage >= offThreshold -> {
-                if (lastCommand != "off") {
-                    Log.d(TAG, "Sonoff: batteria $batteryPercentage% ≥ $offThreshold% → SPEGNI")
-                    Thread { controller.turnOff(deviceId) }.start()
-                }
+                Log.d(TAG, "handleSonoffControl DECISION: $batteryPercentage% >= $offThreshold% → SPEGNI (invio sempre, prima lastCommand era '$lastCommand')")
+                Thread { controller.turnOff(deviceId) }.start()
             }
             batteryPercentage <= onThreshold -> {
-                if (lastCommand != "on") {
-                    Log.d(TAG, "Sonoff: batteria $batteryPercentage% ≤ $onThreshold% → ACCENDI")
-                    Thread { controller.turnOn(deviceId) }.start()
-                }
+                Log.d(TAG, "handleSonoffControl DECISION: $batteryPercentage% <= $onThreshold% → ACCENDI (invio sempre, prima lastCommand era '$lastCommand')")
+                Thread { controller.turnOn(deviceId) }.start()
+            }
+            else -> {
+                Log.d(TAG, "handleSonoffControl: batteria $batteryPercentage% in zona morta ($onThreshold < x < $offThreshold), nessuna azione")
             }
         }
     }

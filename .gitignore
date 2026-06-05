@@ -139,3 +139,6 @@ token.json
 local.properties
 test-*.mjs
 test-*.js
+check-encoding.cjs
+response.bin
+*.bin

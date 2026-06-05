@@ -69,36 +69,47 @@ class SonoffController(private val context: Context) {
         val atExpiry = prefs.getLong(KEY_AT_EXPIRY, 0)
         val rtExpiry = prefs.getLong(KEY_RT_EXPIRY, 0)
 
-        if (atExpiry > now) return true
+        Log.d(TAG, "refreshTokenIfNeeded: now=$now, atExpiry=$atExpiry, rtExpiry=$rtExpiry, valid=${atExpiry > now}")
+
+        if (atExpiry > now) {
+            Log.d(TAG, "refreshTokenIfNeeded: AT ancora valido, skip refresh")
+            return true
+        }
 
         if (rtExpiry <= now) {
-            Log.e(TAG, "Refresh token scaduto, rilancia il server OAuth")
+            Log.e(TAG, "refreshTokenIfNeeded: RT scaduto (rtExpiry=$rtExpiry <= now=$now), serve re-login")
             prefs.edit().putString(KEY_LAST_STATUS, "Token scaduto").apply()
             return false
         }
 
-        Log.d(TAG, "Refresh token in corso...")
+        Log.d(TAG, "refreshTokenIfNeeded: AT scaduto ma RT valido, refresh in corso...")
         val body = JSONObject().apply { put("rt", getRefreshToken()) }
         val result = apiPost("/v2/user/refresh", body, getAccessToken())
 
         if (result != null && result.optInt("error") == 0) {
             val data = result.getJSONObject("data")
+            val newAt = data.getString("at")
+            val newRt = data.getString("rt")
             prefs.edit()
-                .putString(KEY_ACCESS_TOKEN, data.getString("at"))
-                .putString(KEY_REFRESH_TOKEN, data.getString("rt"))
+                .putString(KEY_ACCESS_TOKEN, newAt)
+                .putString(KEY_REFRESH_TOKEN, newRt)
                 .putLong(KEY_AT_EXPIRY, now + 2592000000L)
                 .putLong(KEY_RT_EXPIRY, now + 5184000000L)
                 .putString(KEY_LAST_STATUS, "Token rinnovato")
                 .apply()
-            Log.d(TAG, "Token aggiornato con successo!")
+            Log.d(TAG, "refreshTokenIfNeeded: token aggiornato con successo, newAt len=${newAt.length}")
             return true
         }
 
-        Log.e(TAG, "Refresh fallito: $result")
+        val errCode = result?.optInt("error", -1) ?: -1
+        val errMsg = result?.optString("msg", "") ?: ""
+        Log.e(TAG, "refreshTokenIfNeeded: refresh fallito, error=$errCode msg=$errMsg")
         return false
     }
 
     fun turnOn(deviceId: String): Boolean {
+        val lastCmd = prefs.getString(KEY_LAST_COMMAND, "") ?: ""
+        Log.d(TAG, "turnOn called: deviceId=$deviceId, lastCommand=$lastCmd")
         prefs.edit().putString(KEY_LAST_STATUS, "Accensione...").apply()
         val ok = sendCommand(deviceId, "on")
         if (ok) {
@@ -106,13 +117,17 @@ class SonoffController(private val context: Context) {
                 .putString(KEY_LAST_COMMAND, "on")
                 .putString(KEY_LAST_STATUS, "Ultimo comando: ON")
                 .apply()
+            Log.d(TAG, "turnOn completed: deviceId=$deviceId, lastCommand=off -> on")
         } else {
             prefs.edit().putString(KEY_LAST_STATUS, "Errore ON").apply()
+            Log.e(TAG, "turnOn failed: deviceId=$deviceId, lastCommand rimane=$lastCmd")
         }
         return ok
     }
 
     fun turnOff(deviceId: String): Boolean {
+        val lastCmd = prefs.getString(KEY_LAST_COMMAND, "") ?: ""
+        Log.d(TAG, "turnOff called: deviceId=$deviceId, lastCommand=$lastCmd")
         prefs.edit().putString(KEY_LAST_STATUS, "Spegnimento...").apply()
         val ok = sendCommand(deviceId, "off")
         if (ok) {
@@ -120,14 +135,19 @@ class SonoffController(private val context: Context) {
                 .putString(KEY_LAST_COMMAND, "off")
                 .putString(KEY_LAST_STATUS, "Ultimo comando: OFF")
                 .apply()
+            Log.d(TAG, "turnOff completed: deviceId=$deviceId, lastCommand=on -> off")
         } else {
             prefs.edit().putString(KEY_LAST_STATUS, "Errore OFF").apply()
+            Log.e(TAG, "turnOff failed: deviceId=$deviceId, lastCommand rimane=$lastCmd")
         }
         return ok
     }
 
     private fun sendCommand(deviceId: String, cmd: String): Boolean {
-        if (!refreshTokenIfNeeded()) return false
+        if (!refreshTokenIfNeeded()) {
+            Log.e(TAG, "sendCommand: refreshTokenIfNeeded ha fallito, comando $cmd NON inviato")
+            return false
+        }
 
         try {
             val body = JSONObject().apply {
@@ -135,14 +155,19 @@ class SonoffController(private val context: Context) {
                 put("id", deviceId)
                 put("params", JSONObject().apply { put("switch", cmd) })
             }
+            val baseUrl = getBaseUrl()
+            val url = baseUrl + "/v2/device/thing/status"
+            Log.d(TAG, "sendCommand: POST $url body=$body")
             val result = apiPost("/v2/device/thing/status", body, getAccessToken())
             if (result != null && result.optInt("error") == 0) {
-                Log.d(TAG, "Dispositivo $cmd eseguito")
+                Log.d(TAG, "sendCommand OK: cmd=$cmd deviceId=$deviceId response=$result")
                 return true
             }
-            Log.e(TAG, "Comando fallito: $result")
+            val errCode = result?.optInt("error", -1) ?: -1
+            val errMsg = result?.optString("msg", "") ?: ""
+            Log.e(TAG, "sendCommand FALLITO: cmd=$cmd deviceId=$deviceId error=$errCode msg=$errMsg result=$result")
         } catch (e: Exception) {
-            Log.e(TAG, "Errore invio comando", e)
+            Log.e(TAG, "sendCommand ECCEZIONE: cmd=$cmd deviceId=$deviceId", e)
         }
         return false
     }
@@ -193,11 +218,14 @@ class SonoffController(private val context: Context) {
                 .addHeader("X-CK-Appid", APP_ID)
                 .apply { if (token != null) addHeader("Authorization", "Bearer $token") }
                 .build()
+            Log.d(TAG, "apiPost: $url tokenLen=${token?.length ?: 0}")
             val response = client.newCall(request).execute()
             val bodyStr = response.body?.string()
+            val code = response.code
+            Log.d(TAG, "apiPost response: code=$code bodyLen=${bodyStr?.length ?: 0}")
             return if (bodyStr != null) JSONObject(bodyStr) else null
         } catch (e: Exception) {
-            Log.e(TAG, "API POST error: $e")
+            Log.e(TAG, "apiPost ECCEZIONE per $url", e)
             return null
         }
     }
@@ -210,11 +238,14 @@ class SonoffController(private val context: Context) {
                 .addHeader("X-CK-Appid", APP_ID)
                 .addHeader("Authorization", "Bearer $token")
                 .build()
+            Log.d(TAG, "apiGet: $url tokenLen=${token.length}")
             val response = client.newCall(request).execute()
             val bodyStr = response.body?.string()
+            val code = response.code
+            Log.d(TAG, "apiGet response: code=$code bodyLen=${bodyStr?.length ?: 0}")
             return if (bodyStr != null) JSONObject(bodyStr) else null
         } catch (e: Exception) {
-            Log.e(TAG, "API GET error: $e")
+            Log.e(TAG, "apiGet ECCEZIONE per $url", e)
             return null
         }
     }
