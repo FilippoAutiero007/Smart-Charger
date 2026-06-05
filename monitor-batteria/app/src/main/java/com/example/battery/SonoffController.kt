@@ -25,6 +25,7 @@ class SonoffController(private val context: Context) {
         const val KEY_OFF_THRESHOLD = "sonoff_off_threshold"
         const val KEY_LAST_COMMAND = "sonoff_last_command"
         const val KEY_LAST_STATUS = "sonoff_last_status"
+        const val KEY_DEVICE_LIST = "sonoff_device_list"
 
         private const val APP_ID = "lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo"
         const val AUTH_SERVER_URL = "https://auth-server-hnlj.onrender.com"

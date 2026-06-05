@@ -1564,6 +1564,7 @@ fun BatteryTrendChart(logs: List<LocalBatteryLog>) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SonoffSettingsSection() {
     val context = LocalContext.current
@@ -1579,6 +1580,8 @@ fun SonoffSettingsSection() {
     var onThreshold by remember { mutableStateOf(sonoffPrefs.getInt(SonoffController.KEY_ON_THRESHOLD, 30)) }
     var offThreshold by remember { mutableStateOf(sonoffPrefs.getInt(SonoffController.KEY_OFF_THRESHOLD, 80)) }
     var expanded by remember { mutableStateOf(false) }
+    var tokensVisible by remember { mutableStateOf(false) }
+    var manualTestStatus by remember { mutableStateOf("") }
     var lastStatus by remember {
         mutableStateOf(sonoffPrefs.getString(SonoffController.KEY_LAST_STATUS, "In attesa") ?: "In attesa")
     }
@@ -1587,6 +1590,9 @@ fun SonoffSettingsSection() {
     var authCode by remember { mutableStateOf("") }
     var emailStatus by remember { mutableStateOf("") }
     var showEmailLogin by remember { mutableStateOf(false) }
+    var deviceList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var deviceDropdownExpanded by remember { mutableStateOf(false) }
+    var loadingDevices by remember { mutableStateOf(false) }
 
     LaunchedEffect(enabled) { sonoffPrefs.edit().putBoolean(SonoffController.KEY_ENABLED, enabled).apply() }
     LaunchedEffect(deviceId) { sonoffPrefs.edit().putString(SonoffController.KEY_DEVICE_ID, deviceId).apply() }
@@ -1779,7 +1785,9 @@ fun SonoffSettingsSection() {
                                                         val newAccessToken = result.getString("accessToken")
                                                         val newRefreshToken = result.getString("refreshToken")
                                                         val newRegion = result.optString("region", "eu")
-                                                        emailStatus = "Token ricevuti! Carico dispositivo..."
+                                                        val atExpiry = result.optLong("atExpiryTime", System.currentTimeMillis() + 2592000000L)
+                                                        val rtExpiry = result.optLong("rtExpiryTime", System.currentTimeMillis() + 5184000000L)
+                                                        emailStatus = "Token ricevuti! Carico dispositivi..."
 
                                                         val deviceRequest = Request.Builder()
                                                             .url("$serverUrl/devices?accessToken=$newAccessToken&region=$newRegion")
@@ -1792,10 +1800,15 @@ fun SonoffSettingsSection() {
                                                             accessToken = newAccessToken
                                                             refreshToken = newRefreshToken
                                                             region = newRegion
+                                                            sonoffPrefs.edit()
+                                                                .putLong(SonoffController.KEY_AT_EXPIRY, atExpiry)
+                                                                .putLong(SonoffController.KEY_RT_EXPIRY, rtExpiry)
+                                                                .putString(SonoffController.KEY_DEVICE_LIST, deviceBody)
+                                                                .apply()
                                                             if (devices.length() > 0) {
                                                                 val firstDevice = devices.getJSONObject(0)
                                                                 deviceId = firstDevice.optString("deviceid", "")
-                                                                emailStatus = "OK: ${firstDevice.optString("name", "Sonoff")} configurato!"
+                                                                emailStatus = "OK: ${devices.length()} dispositivi trovati!"
                                                             } else {
                                                                 emailStatus = "Token OK, nessun dispositivo trovato"
                                                             }
@@ -1838,20 +1851,86 @@ fun SonoffSettingsSection() {
                         }
                     }
 
-                    OutlinedTextField(
-                        value = deviceId,
-                        onValueChange = { deviceId = it },
-                        label = { Text("ID Dispositivo") },
-                        placeholder = { Text("Incolla il deviceid") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = com.example.ui.theme.ElegantPurple,
-                            unfocusedBorderColor = com.example.ui.theme.OutlineDark,
-                            focusedLabelColor = com.example.ui.theme.ElegantPurple,
-                            cursorColor = com.example.ui.theme.ElegantPurple
-                        )
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                loadingDevices = true
+                                Thread {
+                                    try {
+                                        val client = OkHttpClient()
+                                        val request = Request.Builder()
+                                            .url("$serverUrl/devices?accessToken=$accessToken&region=$region")
+                                            .build()
+                                        val response = client.newCall(request).execute()
+                                        val body = response.body?.string() ?: "[]"
+                                        val arr = JSONArray(body)
+                                        val list = mutableListOf<Pair<String, String>>()
+                                        for (i in 0 until arr.length()) {
+                                            val obj = arr.getJSONObject(i)
+                                            val id = obj.optString("deviceid", "")
+                                            val name = obj.optString("name", "Senza nome")
+                                            if (id.isNotEmpty()) list.add(name to id)
+                                        }
+                                        Handler(Looper.getMainLooper()).post {
+                                            deviceList = list
+                                            loadingDevices = false
+                                            deviceDropdownExpanded = list.isNotEmpty()
+                                        }
+                                    } catch (e: Exception) {
+                                        Handler(Looper.getMainLooper()).post {
+                                            loadingDevices = false
+                                        }
+                                    }
+                                }.start()
+                            },
+                            enabled = accessToken.isNotEmpty() && !loadingDevices,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = com.example.ui.theme.ElegantPurple
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(56.dp)
+                        ) {
+                            Text(if (loadingDevices) "Caricamento..." else "Carica Dispositivi", fontSize = 12.sp)
+                        }
+
+                        ExposedDropdownMenuBox(
+                            expanded = deviceDropdownExpanded,
+                            onExpandedChange = { deviceDropdownExpanded = it },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            OutlinedTextField(
+                                value = deviceList.find { it.second == deviceId }?.first ?: deviceId,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Dispositivo") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = deviceDropdownExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = com.example.ui.theme.ElegantPurple,
+                                    unfocusedBorderColor = com.example.ui.theme.OutlineDark,
+                                    focusedLabelColor = com.example.ui.theme.ElegantPurple,
+                                    cursorColor = com.example.ui.theme.ElegantPurple
+                                )
+                            )
+                            ExposedDropdownMenu(
+                                expanded = deviceDropdownExpanded,
+                                onDismissRequest = { deviceDropdownExpanded = false }
+                            ) {
+                                deviceList.forEach { (name, id) ->
+                                    DropdownMenuItem(
+                                        text = { Text("$name ($id)") },
+                                        onClick = {
+                                            deviceId = id
+                                            deviceDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1881,7 +1960,29 @@ fun SonoffSettingsSection() {
                         label = { Text("Access Token") },
                         placeholder = { Text("Da token.json → accessToken") },
                         singleLine = true,
-                        visualTransformation = if (expanded) VisualTransformation.None else PasswordVisualTransformation(),
+                        visualTransformation = if (tokensVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            Row {
+                                IconButton(onClick = { tokensVisible = !tokensVisible }) {
+                                    Icon(
+                                        imageVector = if (tokensVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (tokensVisible) "Nascondi" else "Mostra",
+                                        tint = com.example.ui.theme.ElegantPurple
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clip = android.content.ClipData.newPlainText("accessToken", accessToken)
+                                    clipboard.setPrimaryClip(clip)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copia",
+                                        tint = com.example.ui.theme.ElegantPurple
+                                    )
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = com.example.ui.theme.ElegantPurple,
@@ -1897,7 +1998,29 @@ fun SonoffSettingsSection() {
                         label = { Text("Refresh Token") },
                         placeholder = { Text("Da token.json → refreshToken") },
                         singleLine = true,
-                        visualTransformation = if (expanded) VisualTransformation.None else PasswordVisualTransformation(),
+                        visualTransformation = if (tokensVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            Row {
+                                IconButton(onClick = { tokensVisible = !tokensVisible }) {
+                                    Icon(
+                                        imageVector = if (tokensVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (tokensVisible) "Nascondi" else "Mostra",
+                                        tint = com.example.ui.theme.ElegantPurple
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clip = android.content.ClipData.newPlainText("refreshToken", refreshToken)
+                                    clipboard.setPrimaryClip(clip)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copia",
+                                        tint = com.example.ui.theme.ElegantPurple
+                                    )
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = com.example.ui.theme.ElegantPurple,
@@ -1906,6 +2029,92 @@ fun SonoffSettingsSection() {
                             cursorColor = com.example.ui.theme.ElegantPurple
                         )
                     )
+
+                    HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.4f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                if (deviceId.isEmpty()) {
+                                    manualTestStatus = "Nessun dispositivo selezionato"
+                                    return@Button
+                                }
+                                manualTestStatus = "Accensione..."
+                                Thread {
+                                    try {
+                                        val controller = SonoffController(context)
+                                        val ok = controller.turnOn(deviceId)
+                                        Handler(Looper.getMainLooper()).post {
+                                            manualTestStatus = if (ok) "ON inviato!" else "Errore ON"
+                                        }
+                                    } catch (e: Exception) {
+                                        Handler(Looper.getMainLooper()).post {
+                                            manualTestStatus = "Errore: ${e.message}"
+                                        }
+                                    }
+                                }.start()
+                            },
+                            enabled = accessToken.isNotEmpty() && deviceId.isNotEmpty(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = com.example.ui.theme.GreenHealthy
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f).height(48.dp)
+                        ) {
+                            Icon(Icons.Default.Power, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ON", fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (deviceId.isEmpty()) {
+                                    manualTestStatus = "Nessun dispositivo selezionato"
+                                    return@Button
+                                }
+                                manualTestStatus = "Spegnimento..."
+                                Thread {
+                                    try {
+                                        val controller = SonoffController(context)
+                                        val ok = controller.turnOff(deviceId)
+                                        Handler(Looper.getMainLooper()).post {
+                                            manualTestStatus = if (ok) "OFF inviato!" else "Errore OFF"
+                                        }
+                                    } catch (e: Exception) {
+                                        Handler(Looper.getMainLooper()).post {
+                                            manualTestStatus = "Errore: ${e.message}"
+                                        }
+                                    }
+                                }.start()
+                            },
+                            enabled = accessToken.isNotEmpty() && deviceId.isNotEmpty(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = com.example.ui.theme.RedAlert
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f).height(48.dp)
+                        ) {
+                            Icon(Icons.Default.Power, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("OFF", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (manualTestStatus.isNotBlank()) {
+                        Text(
+                            text = manualTestStatus,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (manualTestStatus.contains("invio") || manualTestStatus.contains("!"))
+                                com.example.ui.theme.GreenHealthy
+                            else if (manualTestStatus.contains("Errore"))
+                                com.example.ui.theme.RedAlert
+                            else com.example.ui.theme.TextSecondary
+                        )
+                    }
 
                     HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.4f))
 

@@ -213,7 +213,11 @@ app.get('/devices', async (req, res) => {
       accessToken,
     })
 
-    const devices = await userApi.device.list()
+    const result = await userApi.device.getAllThings()
+    const things = result?.data?.thingList || []
+    const devices = things
+      .filter(t => t.itemType === 1 || t.itemType === 2)
+      .map(t => t.itemData)
     res.json(devices)
   } catch (err) {
     console.error('devices error:', err)
