@@ -144,10 +144,10 @@ app.get('/callback', async (req, res) => {
 
     completedLogins.set(foundCode, {
       region: tokenResult.region,
-      accessToken: tokenResult.accessToken,
-      refreshToken: tokenResult.refreshToken,
-      atExpiryTime: tokenResult.atExpiryTime,
-      rtExpiryTime: tokenResult.rtExpiryTime,
+      accessToken: tokenResult.data.accessToken,
+      refreshToken: tokenResult.data.refreshToken,
+      atExpiryTime: tokenResult.data.atExpiredTime,
+      rtExpiryTime: tokenResult.data.rtExpiredTime,
       status: 'completed',
     })
 
