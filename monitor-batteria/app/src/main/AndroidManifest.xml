@@ -41,6 +41,12 @@
             </intent-filter>
         </receiver>
 
+        <service
+            android:name=".battery.BatteryMonitorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

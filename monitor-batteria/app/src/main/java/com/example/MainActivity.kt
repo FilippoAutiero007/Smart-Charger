@@ -67,6 +67,7 @@ import androidx.work.WorkManager
 import com.example.battery.BatteryCheckWorker
 import com.example.battery.BatteryMonitor
 import com.example.battery.BatteryState
+import com.example.battery.BatteryMonitorService
 import com.example.battery.LocalLogService
 import com.example.battery.LocalBatteryLog
 import com.example.ui.theme.Amber500
@@ -105,72 +106,6 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             val state = BatteryMonitor.parseState(intent)
             batteryState.value = state
-            // Salva log storico
-            LocalLogService.saveLog(context, state.percentage, state.isCharging, "Tempo Reale")
-
-            // Real-time notification check if enabled
-            val sharedPrefs = context.getSharedPreferences(BatteryCheckWorker.PREFS_NAME, Context.MODE_PRIVATE)
-            val isEnabled = sharedPrefs.getBoolean(BatteryCheckWorker.KEY_ENABLED, true)
-            if (isEnabled) {
-                val threshold = sharedPrefs.getInt(BatteryCheckWorker.KEY_THRESHOLD, 20)
-                val hasNotified = sharedPrefs.getBoolean(BatteryCheckWorker.KEY_NOTIFIED_LOW, false)
-
-                if (state.percentage <= threshold) {
-                    if (!state.isCharging) {
-                        if (!hasNotified) {
-                            sendBatteryLowNotification(context, state.percentage, threshold)
-                            sharedPrefs.edit().putBoolean(BatteryCheckWorker.KEY_NOTIFIED_LOW, true).apply()
-                        }
-                    } else {
-                        // Reset notification state if charging is active to allow future triggers
-                        if (hasNotified) {
-                            sharedPrefs.edit().putBoolean(BatteryCheckWorker.KEY_NOTIFIED_LOW, false).apply()
-                        }
-                    }
-                } else {
-                    // Reset notification state when battery returns above threshold
-                    if (hasNotified) {
-                        sharedPrefs.edit().putBoolean(BatteryCheckWorker.KEY_NOTIFIED_LOW, false).apply()
-                    }
-                }
-            }
-
-            // Controllo Sonoff in tempo reale
-            val sonoffPrefs = context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
-            if (sonoffPrefs.getBoolean(SonoffController.KEY_ENABLED, false)) {
-                val deviceId = sonoffPrefs.getString(SonoffController.KEY_DEVICE_ID, "") ?: ""
-                val onThreshold = sonoffPrefs.getInt(SonoffController.KEY_ON_THRESHOLD, 30)
-                val offThreshold = sonoffPrefs.getInt(SonoffController.KEY_OFF_THRESHOLD, 80)
-                val lastCommand = sonoffPrefs.getString(SonoffController.KEY_LAST_COMMAND, "") ?: ""
-                val atLen = sonoffPrefs.getString(SonoffController.KEY_ACCESS_TOKEN, "")?.length ?: 0
-
-                Log.d("MainActivity", "realtime-sonoff: battery=${state.percentage}%, on<=$onThreshold%, off>=$offThreshold%, lastCommand=$lastCommand, deviceId=$deviceId, atLen=$atLen, charging=${state.isCharging}")
-
-                if (deviceId.isNotEmpty()) {
-                    Thread {
-                        try {
-                            val controller = SonoffController(context)
-                            when {
-                                state.percentage >= offThreshold -> {
-                                    Log.d("MainActivity", "realtime-sonoff: DECISION OFF (battery ${state.percentage}% >= $offThreshold%, lastCommand era '$lastCommand')")
-                                    controller.turnOff(deviceId)
-                                }
-                                state.percentage <= onThreshold -> {
-                                    Log.d("MainActivity", "realtime-sonoff: DECISION ON (battery ${state.percentage}% <= $onThreshold%, lastCommand era '$lastCommand')")
-                                    controller.turnOn(deviceId)
-                                }
-                                else -> {
-                                    Log.d("MainActivity", "realtime-sonoff: nessuna azione (zona morta)")
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "Errore Sonoff real-time", e)
-                        }
-                    }.start()
-                } else {
-                    Log.d("MainActivity", "realtime-sonoff: deviceId vuoto, SKIP")
-                }
-            }
         }
     }
 
@@ -178,6 +113,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         this.enableEdgeToEdge()
 
+        ensureBatteryMonitorService()
         // Schedula il monitoraggio periodico in background all'avvio dell'app
         scheduleBackgroundBatteryCheck(applicationContext)
 
@@ -283,6 +219,13 @@ class MainActivity : ComponentActivity() {
             ExistingPeriodicWorkPolicy.KEEP,
             workRequest
         )
+    }
+
+    private fun ensureBatteryMonitorService() {
+        val serviceIntent = Intent(this, BatteryMonitorService::class.java).apply {
+            action = BatteryMonitorService.ACTION_START
+        }
+        ContextCompat.startForegroundService(this, serviceIntent)
     }
 
     // Invia direttamente una notifica immediata per scopo di test (User Experience ottimale)
