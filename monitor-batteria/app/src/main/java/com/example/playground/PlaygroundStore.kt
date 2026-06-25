@@ -17,14 +17,18 @@ data class PlaygroundNode(
     val x: Float,
     val y: Float,
     val deviceId: String? = null,
-    val config: String? = null
+    val config: String? = null,
+    val refProjectId: String? = null
 )
 
 data class PlaygroundProject(
     val id: String,
     val name: String,
     val nodes: List<PlaygroundNode> = emptyList(),
-    val connections: List<PlaygroundConnection> = emptyList()
+    val connections: List<PlaygroundConnection> = emptyList(),
+    val isRunning: Boolean = false,
+    val lastRunAt: Long? = null,
+    val lastRunStatus: String? = null
 )
 
 object PlaygroundStore {
@@ -92,7 +96,8 @@ object PlaygroundStore {
                         x = n.getDouble("x").toFloat(),
                         y = n.getDouble("y").toFloat(),
                         deviceId = deviceId,
-                        config = config
+                        config = config,
+                        refProjectId = n.optString("refProjectId", "").ifBlank { null }
                     )
                 )
             }
@@ -115,7 +120,10 @@ object PlaygroundStore {
             id = obj.getString("id"),
             name = obj.getString("name"),
             nodes = nodes,
-            connections = connections
+            connections = connections,
+            isRunning = obj.optBoolean("isRunning", false),
+            lastRunAt = obj.optLong("lastRunAt").takeIf { obj.has("lastRunAt") },
+            lastRunStatus = obj.optString("lastRunStatus", "").ifBlank { null }
         )
     }
 
@@ -131,6 +139,7 @@ object PlaygroundStore {
                     put("y", node.y)
                     node.deviceId?.let { put("deviceId", it) }
                     node.config?.let { put("config", it) }
+                    node.refProjectId?.let { put("refProjectId", it) }
                 }
             )
         }
@@ -150,6 +159,9 @@ object PlaygroundStore {
             put("name", project.name)
             put("nodes", nodes)
             put("connections", connections)
+            put("isRunning", project.isRunning)
+            project.lastRunAt?.let { put("lastRunAt", it) }
+            project.lastRunStatus?.let { put("lastRunStatus", it) }
         }
     }
 }

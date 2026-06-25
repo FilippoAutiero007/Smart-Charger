@@ -10,6 +10,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import com.example.playground.PlaygroundAutomation
 
 object BatteryAutomation {
     private const val TAG = "BatteryAutomation"
@@ -19,6 +20,7 @@ object BatteryAutomation {
         LocalLogService.saveLog(appContext, state.percentage, state.isCharging, source)
         handleBatteryAlert(appContext, state)
         handleSonoffControl(appContext, state.percentage)
+        PlaygroundAutomation.handleBatteryState(appContext, state, source)
     }
 
     private fun handleBatteryAlert(context: Context, state: BatteryState) {

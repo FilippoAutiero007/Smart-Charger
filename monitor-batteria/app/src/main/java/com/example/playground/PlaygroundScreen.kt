@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -87,7 +88,8 @@ private data class BlockTemplate(
     val title: String,
     val subtitle: String,
     val deviceId: String? = null,
-    val config: String? = null
+    val config: String? = null,
+    val refProjectId: String? = null
 )
 
 private data class DragPreview(
@@ -129,6 +131,7 @@ fun PlaygroundScreen(
     var dragPreview by remember { mutableStateOf<DragPreview?>(null) }
 
     val currentProject = projects.firstOrNull { it.id == selectedProjectId } ?: projects.first()
+    val otherProjects = projects.filterNot { it.id == currentProject.id }
 
     val availableDevices = remember {
         val raw = sonoffPrefs.getString(SonoffController.KEY_DEVICE_LIST, "") ?: ""
@@ -196,11 +199,34 @@ fun PlaygroundScreen(
                     )
                 )
             )
+            if (otherProjects.isNotEmpty()) {
+                add(
+                    Section(
+                        title = "Libreria progetti",
+                        blocks = otherProjects.map { project ->
+                            BlockTemplate(
+                                kind = "project",
+                                title = project.name,
+                                subtitle = if (project.isRunning) "Richiama progetto attivo" else "Richiama progetto salvato",
+                                config = "project:${project.id}",
+                                refProjectId = project.id
+                            )
+                        }
+                    )
+                )
+            }
         }
     }
 
     fun updateCurrentProject(transform: (PlaygroundProject) -> PlaygroundProject) {
         projects = projects.map { if (it.id == currentProject.id) transform(it) else it }
+    }
+
+    fun updateProject(projectId: String, transform: (PlaygroundProject) -> PlaygroundProject) {
+        projects = projects.map { if (it.id == projectId) transform(it) else it }
+        if (selectedProjectId == projectId) {
+            selectedProjectId = projectId
+        }
     }
 
     fun addProject(name: String) {
@@ -217,7 +243,8 @@ fun PlaygroundScreen(
             x = (dropPosition.x - canvasBounds.left - NODE_W / 2f).coerceIn(10f, (canvasSize.width - NODE_W - 10f).coerceAtLeast(10f)),
             y = (dropPosition.y - canvasBounds.top - NODE_H / 2f).coerceIn(10f, (canvasSize.height - NODE_H - 10f).coerceAtLeast(10f)),
             deviceId = template.deviceId,
-            config = template.config
+            config = template.config,
+            refProjectId = template.refProjectId
         )
         updateCurrentProject { it.copy(nodes = it.nodes + node) }
     }
@@ -314,8 +341,14 @@ fun PlaygroundScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text("Playground", color = TextPrimary, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
                 Text(
-                    text = if (isLoggedIn) "Login eWeLink attivo" else "Effettua il login eWeLink per usare i dispositivi",
-                    color = if (isLoggedIn) GreenHealthy else TextTertiary,
+                    text = if (currentProject.isRunning) {
+                        "Progetto attivo in background"
+                    } else if (isLoggedIn) {
+                        "Login eWeLink attivo"
+                    } else {
+                        "Effettua il login eWeLink per usare i dispositivi"
+                    },
+                    color = if (currentProject.isRunning) GreenHealthy else if (isLoggedIn) GreenHealthy else TextTertiary,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -352,20 +385,63 @@ fun PlaygroundScreen(
                     }
                 }
 
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(projects, key = { it.id }) { project ->
                         val selected = project.id == selectedProjectId
-                        FilterChip(
-                            selected = selected,
-                            onClick = { selectedProjectId = project.id },
-                            label = {
-                                Text(
-                                    text = project.name,
-                                    maxLines = 1,
-                                    color = if (selected) TextPrimary else TextSecondary
-                                )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = selected,
+                                onClick = { selectedProjectId = project.id },
+                                label = {
+                                    Column {
+                                        Text(
+                                            text = project.name,
+                                            maxLines = 1,
+                                            color = if (selected) TextPrimary else TextSecondary
+                                        )
+                                        if (project.isRunning) {
+                                            Text(
+                                                text = "In esecuzione",
+                                                color = GreenHealthy,
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+                            IconButton(
+                                onClick = {
+                                    updateProject(project.id) {
+                                        it.copy(
+                                            isRunning = true,
+                                            lastRunAt = System.currentTimeMillis(),
+                                            lastRunStatus = "Avviato manualmente"
+                                        )
+                                    }
+                                },
+                                enabled = !project.isRunning
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Esegui progetto", tint = ElegantPurple)
                             }
-                        )
+                            IconButton(
+                                onClick = {
+                                    updateProject(project.id) {
+                                        it.copy(
+                                            isRunning = false,
+                                            lastRunAt = System.currentTimeMillis(),
+                                            lastRunStatus = "Fermato manualmente"
+                                        )
+                                    }
+                                },
+                                enabled = project.isRunning
+                            ) {
+                                Icon(Icons.Default.Stop, contentDescription = "Stop progetto", tint = RedAlert)
+                            }
+                        }
                     }
                 }
 
@@ -722,6 +798,7 @@ private fun NodeCard(
             Text(
                 text = when {
                     node.deviceId != null -> "Device ${node.deviceId.take(8)}"
+                    node.refProjectId != null -> "Progetto ${node.refProjectId.take(8)}"
                     !node.config.isNullOrBlank() -> node.config
                     else -> "configurabile"
                 },
