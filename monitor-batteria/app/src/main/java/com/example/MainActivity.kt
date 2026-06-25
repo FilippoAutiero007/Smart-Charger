@@ -70,6 +70,7 @@ import com.example.battery.BatteryState
 import com.example.battery.BatteryMonitorService
 import com.example.battery.LocalLogService
 import com.example.battery.LocalBatteryLog
+import com.example.playground.PlaygroundScreen
 import com.example.ui.theme.Amber500
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
@@ -908,103 +909,112 @@ fun BatteryMonitorContent(
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
-                    SonoffSettingsSection()
+                    SonoffSettingsSection(
+                        onOpenPlayground = { activeTab = "playground" }
+                    )
 
+                }
+                "playground" -> {
+                    PlaygroundScreen(
+                        onBack = { activeTab = "opzioni" }
+                    )
                 }
             }
         }
 
         // BOTTOM NAVIGATION DECORATION ELEGANT DARK (Material 3 compliant with larger icons and dynamic indicator)
-        NavigationBar(
-            containerColor = com.example.ui.theme.CardDark,
-            tonalElevation = 8.dp,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-        ) {
-            NavigationBarItem(
-                selected = activeTab == "stato",
-                onClick = { activeTab = "stato" },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Home,
-                        contentDescription = "Stato",
-                        modifier = Modifier.size(32.dp)
-                    )
-                },
-                label = {
-                    Text(
-                        text = "Stato",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (activeTab == "stato") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 13.sp
+        if (activeTab != "playground") {
+            NavigationBar(
+                containerColor = com.example.ui.theme.CardDark,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+            ) {
+                NavigationBarItem(
+                    selected = activeTab == "stato",
+                    onClick = { activeTab = "stato" },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Stato",
+                            modifier = Modifier.size(32.dp)
                         )
+                    },
+                    label = {
+                        Text(
+                            text = "Stato",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (activeTab == "stato") FontWeight.ExtraBold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = com.example.ui.theme.BackgroundDark,
+                        selectedTextColor = com.example.ui.theme.ElegantPurple,
+                        indicatorColor = com.example.ui.theme.ElegantPurple,
+                        unselectedIconColor = com.example.ui.theme.TextTertiary,
+                        unselectedTextColor = com.example.ui.theme.TextTertiary
                     )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = com.example.ui.theme.BackgroundDark,
-                    selectedTextColor = com.example.ui.theme.ElegantPurple,
-                    indicatorColor = com.example.ui.theme.ElegantPurple,
-                    unselectedIconColor = com.example.ui.theme.TextTertiary,
-                    unselectedTextColor = com.example.ui.theme.TextTertiary
                 )
-            )
 
-            NavigationBarItem(
-                selected = activeTab == "grafici",
-                onClick = { activeTab = "grafici" },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.List,
-                        contentDescription = "Grafici",
-                        modifier = Modifier.size(32.dp)
-                    )
-                },
-                label = {
-                    Text(
-                        text = "Grafici",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (activeTab == "grafici") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 13.sp
+                NavigationBarItem(
+                    selected = activeTab == "grafici",
+                    onClick = { activeTab = "grafici" },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.List,
+                            contentDescription = "Grafici",
+                            modifier = Modifier.size(32.dp)
                         )
+                    },
+                    label = {
+                        Text(
+                            text = "Grafici",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (activeTab == "grafici") FontWeight.ExtraBold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = com.example.ui.theme.BackgroundDark,
+                        selectedTextColor = com.example.ui.theme.ElegantPurple,
+                        indicatorColor = com.example.ui.theme.ElegantPurple,
+                        unselectedIconColor = com.example.ui.theme.TextTertiary,
+                        unselectedTextColor = com.example.ui.theme.TextTertiary
                     )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = com.example.ui.theme.BackgroundDark,
-                    selectedTextColor = com.example.ui.theme.ElegantPurple,
-                    indicatorColor = com.example.ui.theme.ElegantPurple,
-                    unselectedIconColor = com.example.ui.theme.TextTertiary,
-                    unselectedTextColor = com.example.ui.theme.TextTertiary
                 )
-            )
 
-            NavigationBarItem(
-                selected = activeTab == "opzioni",
-                onClick = { activeTab = "opzioni" },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Opzioni",
-                        modifier = Modifier.size(32.dp)
-                    )
-                },
-                label = {
-                    Text(
-                        text = "Opzioni",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (activeTab == "opzioni") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 13.sp
+                NavigationBarItem(
+                    selected = activeTab == "opzioni",
+                    onClick = { activeTab = "opzioni" },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Opzioni",
+                            modifier = Modifier.size(32.dp)
                         )
+                    },
+                    label = {
+                        Text(
+                            text = "Opzioni",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (activeTab == "opzioni") FontWeight.ExtraBold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = com.example.ui.theme.BackgroundDark,
+                        selectedTextColor = com.example.ui.theme.ElegantPurple,
+                        indicatorColor = com.example.ui.theme.ElegantPurple,
+                        unselectedIconColor = com.example.ui.theme.TextTertiary,
+                        unselectedTextColor = com.example.ui.theme.TextTertiary
                     )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = com.example.ui.theme.BackgroundDark,
-                    selectedTextColor = com.example.ui.theme.ElegantPurple,
-                    indicatorColor = com.example.ui.theme.ElegantPurple,
-                    unselectedIconColor = com.example.ui.theme.TextTertiary,
-                    unselectedTextColor = com.example.ui.theme.TextTertiary
                 )
-            )
+            }
         }
     }
 }
@@ -1527,7 +1537,9 @@ fun BatteryTrendChart(logs: List<LocalBatteryLog>) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SonoffSettingsSection() {
+fun SonoffSettingsSection(
+    onOpenPlayground: () -> Unit
+) {
     val context = LocalContext.current
     val sonoffPrefs = remember {
         context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
@@ -1550,6 +1562,8 @@ fun SonoffSettingsSection() {
     var email by remember { mutableStateOf("") }
     var authCode by remember { mutableStateOf("") }
     var emailStatus by remember { mutableStateOf("") }
+    var emailRequestId by remember { mutableStateOf("") }
+    var emailRequestInProgress by remember { mutableStateOf(false) }
     var showEmailLogin by remember { mutableStateOf(false) }
     var deviceList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var deviceDropdownExpanded by remember { mutableStateOf(false) }
@@ -1692,10 +1706,15 @@ fun SonoffSettingsSection() {
                                     )
                                     Button(
                                         onClick = {
-                                            emailStatus = "Invio in corso..."
+                                            emailStatus = "Invio in coda..."
+                                            emailRequestInProgress = true
                                             Thread {
                                                 try {
-                                                    val client = OkHttpClient()
+                                                    val client = OkHttpClient.Builder()
+                                                        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                                                        .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                                                        .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                                                        .build()
                                                     val json = JSONObject().apply { put("email", email) }
                                                     val body = json.toString().toRequestBody("application/json".toMediaType())
                                                     val request = Request.Builder()
@@ -1705,27 +1724,90 @@ fun SonoffSettingsSection() {
                                                     val response = client.newCall(request).execute()
                                                     val responseBody = response.body?.string() ?: "{}"
                                                     val result = JSONObject(responseBody)
-                                                    if (result.has("code")) {
-                                                        val code = result.getString("code")
-                                                        authCode = code
-                                                        emailStatus = "Codice ricevuto: $code"
+                                                    val code = result.optString("code", "")
+                                                    val requestId = result.optString("requestId", "")
+                                                    if (code.isNotBlank()) {
+                                                        Handler(Looper.getMainLooper()).post { authCode = code }
+                                                    }
+                                                    if (requestId.isNotBlank()) {
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            emailRequestId = requestId
+                                                            emailStatus = "In coda di invio..."
+                                                        }
+                                                        Thread {
+                                                            try {
+                                                                val statusClient = OkHttpClient.Builder()
+                                                                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                                                                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                                                                    .build()
+                                                                var finalState = false
+                                                                for (pollAttempt in 0 until 45) {
+                                                                    val statusRequest = Request.Builder()
+                                                                        .url("$serverUrl/email-status/$requestId")
+                                                                        .build()
+                                                                    val statusResponse = statusClient.newCall(statusRequest).execute()
+                                                                    val statusBody = statusResponse.body?.string() ?: "{}"
+                                                                    val statusJson = JSONObject(statusBody)
+                                                                    val status = statusJson.optString("status", "unknown")
+                                                                    val attempts = statusJson.optInt("attempts", 0)
+                                                                    val maxAttempts = statusJson.optInt("maxAttempts", 3)
+                                                                    val lastError = statusJson.optString("lastError", "")
+                                                                    val providerMessageId = statusJson.optString("providerMessageId", "")
+                                                                    val message = when (status) {
+                                                                        "queued" -> "Email in coda..."
+                                                                        "sending" -> "Invio in corso (tentativo $attempts/$maxAttempts)..."
+                                                                        "retrying" -> "Ritento invio ($attempts/$maxAttempts)..."
+                                                                        "sent" -> "Email inviata con successo${if (providerMessageId.isNotBlank()) " • id $providerMessageId" else ""}"
+                                                                        "failed" -> "Invio fallito: $lastError"
+                                                                        "dry-run" -> "Server in prova: email non inviata davvero"
+                                                                        else -> "Stato invio: $status"
+                                                                    }
+                                                                    Handler(Looper.getMainLooper()).post {
+                                                                        emailStatus = message
+                                                                        emailRequestInProgress = status !in setOf("sent", "failed", "dry-run")
+                                                                    }
+                                                                    if (status in setOf("sent", "failed", "dry-run")) {
+                                                                        finalState = true
+                                                                        break
+                                                                    }
+                                                                    Thread.sleep(1200)
+                                                                }
+                                                                if (!finalState) {
+                                                                    Handler(Looper.getMainLooper()).post {
+                                                                        emailStatus = "Timeout stato invio: controlla i log del server"
+                                                                        emailRequestInProgress = false
+                                                                    }
+                                                                }
+                                                            } catch (pollErr: Exception) {
+                                                                Handler(Looper.getMainLooper()).post {
+                                                                    emailStatus = "Errore monitoraggio invio: ${pollErr.message}"
+                                                                    emailRequestInProgress = false
+                                                                }
+                                                            }
+                                                        }.start()
                                                     } else {
                                                         val err = result.optString("error", "Errore sconosciuto")
-                                                        emailStatus = "Errore: $err"
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            emailStatus = "Errore: $err"
+                                                            emailRequestInProgress = false
+                                                        }
                                                     }
                                                 } catch (e: Exception) {
-                                                    emailStatus = "Errore: ${e.message}"
+                                                    Handler(Looper.getMainLooper()).post {
+                                                        emailStatus = "Errore: ${e.message}"
+                                                        emailRequestInProgress = false
+                                                    }
                                                 }
                                             }.start()
                                         },
-                                        enabled = email.isNotBlank(),
+                                        enabled = email.isNotBlank() && !emailRequestInProgress,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = com.example.ui.theme.ElegantPurple
                                         ),
                                         shape = RoundedCornerShape(10.dp),
                                         modifier = Modifier.height(56.dp)
                                     ) {
-                                        Text("Invia Link", fontWeight = FontWeight.Bold)
+                                        Text(if (emailRequestInProgress) "..." else "Invia Link", fontWeight = FontWeight.Bold)
                                     }
                                 }
 
@@ -1818,9 +1900,9 @@ fun SonoffSettingsSection() {
                                     Text(
                                         text = emailStatus,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (emailStatus.startsWith("OK") || emailStatus.startsWith("Codice"))
+                                        color = if (emailStatus.startsWith("OK") || emailStatus.startsWith("Codice") || emailStatus.contains("inviata con successo", ignoreCase = true))
                                             com.example.ui.theme.GreenHealthy
-                                        else if (emailStatus.startsWith("Errore"))
+                                        else if (emailStatus.startsWith("Errore") || emailStatus.contains("fallito", ignoreCase = true))
                                             com.example.ui.theme.RedAlert
                                         else
                                             com.example.ui.theme.TextSecondary
@@ -2262,6 +2344,19 @@ fun SonoffSettingsSection() {
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Invia log diagnostici", fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = onOpenPlayground,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = com.example.ui.theme.ElegantPurple
+                        )
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Playground", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
