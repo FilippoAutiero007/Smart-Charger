@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -39,6 +39,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +66,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,7 +91,8 @@ private data class BlockTemplate(
     val subtitle: String,
     val deviceId: String? = null,
     val config: String? = null,
-    val refProjectId: String? = null
+    val refProjectId: String? = null,
+    val helpKey: String = "$kind:${config ?: ""}"
 )
 
 private data class DragPreview(
@@ -101,6 +104,119 @@ private data class Section(
     val title: String,
     val blocks: List<BlockTemplate>
 )
+
+private data class ExampleProject(
+    val name: String,
+    val create: (String) -> PlaygroundProject
+)
+
+private val helpTexts = mapOf(
+    "http_request:" to "Chiama qualsiasi API esterna e salva il risultato in una variabile.\n\n" +
+        "Configura URL, metodo (GET/POST) e un \"jsonPath\" per estrarre un valore specifico.\n" +
+        "Il risultato viene salvato in una variabile (es. \$meteo, \$temp) che puoi usare\n" +
+        "in un blocco \"Confronto variabile\".\n\n" +
+        "Esempio: API meteo → \$meteo, poi condizione \$meteo contiene \"Rain\".",
+    "http_request:weather" to "Chiama wttr.in per ottenere il meteo e salva la descrizione in \$meteo.\n" +
+        "Poi usa un blocco \"Confronto variabile\" per decidere cosa fare.",
+    "logic:" to "I blocchi logici combinano più condizioni:\n\n" +
+        "• AND: VERO solo quando TUTTE le condizioni collegate sono vere\n" +
+        "• OR: VERO quando ALMENO UNA condizione collegata è vera\n" +
+        "• NOT: Inverte il risultato (vero diventa falso e viceversa)\n\n" +
+        "Collega le condizioni a sinistra e le azioni a destra.",
+    "condition:" to "I blocchi condizione verificano se una situazione è vera o falsa.\n\n" +
+        "Sono l'\"interruttore\" del tuo progetto: se la condizione è vera,\n" +
+        "l'automazione prosegue verso le azioni.\n\n" +
+        "Collega l'uscita a un blocco logico (AND/OR) o direttamente a un'azione.",
+    "condition:time" to "Attiva l'automazione solo in una fascia oraria specifica.\n\n" +
+        "Configura ora inizio e ora fine (es. 14:00-18:00).\n" +
+        "Il blocco è VERO solo se l'orario corrente rientra nella fascia.",
+    "condition:season" to "Attiva l'automazione in una stagione specifica.\n\n" +
+        "Configura estate, inverno, primavera o autunno.\n" +
+        "Il blocco è VERO solo se la data corrente corrisponde alla stagione scelta.",
+    "condition:temperature" to "Confronta la temperatura attuale con una soglia.\n\n" +
+        "Usa la temperatura della batteria del telefono. Puoi impostare\n" +
+        "una soglia (es. > 25°C) per decidere se attivare l'automazione.",
+    "condition:device_state" to "Controlla lo stato del tuo dispositivo Sonoff.\n\n" +
+        "Il blocco è VERO se il dispositivo è acceso, FALSO se spento.\n" +
+        "Utile per creare automazioni che reagiscono allo stato della presa.",
+    "condition:presence" to "Rileva se il telefono è acceso e operativo.\n\n" +
+        "Il blocco è VERO se la batteria è presente (percentuale > 0%).\n" +
+        "Utile per attivare automazioni solo quando il telefono è attivo.",
+    "confronto:" to "Confronta una variabile con un valore usando un operatore.\n\n" +
+        "Operatori disponibili: ==, !=, >, <, >=, <=, contains, matches\n\n" +
+        "Esempi:\n" +
+        "• \$meteo contains \"Rain\" → vero se piove\n" +
+        "• \$temp > 30 → vero se temperatura oltre 30\n" +
+        "• \$battery_percentage <= 20 → vero se batteria scarica",
+    "delay:" to "Aggiunge un ritardo prima di eseguire l'azione successiva.\n\n" +
+        "Configura i minuti di attesa (es. 30 minuti).\n" +
+        "Utile per: accendi luce → aspetta 30 min → spegni luce",
+    "action_webhook:" to "Invia una richiesta HTTP a qualsiasi URL.\n\n" +
+        "Perfetto per integrare IFTTT, Telegram, Home Assistant,\n" +
+        "o il tuo server personale. Supporta GET e POST con body JSON.\n\n" +
+        "Puoi usare variabili nel body con {variabile} o \${variabile}.",
+    "action:" to "I blocchi azione eseguono comandi reali o simulati.\n\n" +
+        "• Apri/Chiudi finestre → azione simulata (solo log)\n" +
+        "• Accendi AC/Termosifone → accende dispositivo Sonoff\n" +
+        "• Accendi/Spegni luce → comando Sonoff\n\n" +
+        "Collega un'azione dopo una condizione o un blocco logico.",
+    "action:open_windows" to "Azione simulata: registra nel log l'apertura finestre.\n\n" +
+        "Nessun dispositivo reale necessario. Usala per testare\n" +
+        "la logica del tuo progetto prima di collegare dispositivi veri.",
+    "action:close_windows" to "Azione simulata: registra nel log la chiusura finestre.\n\n" +
+        "Nessun dispositivo reale necessario. Usala per testare\n" +
+        "la logica del tuo progetto prima di collegare dispositivi veri.",
+    "action:ac_on" to "Accende il dispositivo Sonoff collegato.\n\n" +
+        "Devi aver configurato un dispositivo Sonoff e fatto\n" +
+        "il login con eWeLink. Il dispositivo specificato verrà acceso.",
+    "action:heater_on" to "Accende il dispositivo Sonoff collegato.\n\n" +
+        "Devi aver configurato un dispositivo Sonoff e fatto\n" +
+        "il login con eWeLink. Il dispositivo specificato verrà acceso.",
+    "action:light_on" to "Accende il dispositivo Sonoff collegato.\n\n" +
+        "Devi aver configurato un dispositivo Sonoff e fatto\n" +
+        "il login con eWeLink. Il dispositivo specificato verrà acceso.",
+    "action:light_off" to "Spegne il dispositivo Sonoff collegato.\n\n" +
+        "Devi aver configurato un dispositivo Sonoff e fatto\n" +
+        "il login con eWeLink. Il dispositivo specificato verrà spento.",
+    "device:" to "Rappresenta un dispositivo Sonoff/eWeLink.\n\n" +
+        "Trascinalo nel canvas e collegalo ad azioni o blocchi logici.\n" +
+        "Serve il login eWeLink per vedere i tuoi dispositivi.",
+    "project:" to "Richiama un altro progetto salvato.\n\n" +
+        "Permette di creare automazioni riutilizzabili e combinarle.\n" +
+        "Utile per creare routine complesse da pezzi più semplici.\n\n" +
+        "Attenzione: evita richiami circolari (A→B→A).",
+    "battery:" to "Blocchi per monitorare lo stato della batteria.\n\n" +
+        "Funzionano solo se il progetto ha trigger \"Batteria\".\n" +
+        "Variabili disponibili: \$battery_percentage, \$battery_temp,\n" +
+        "\$battery_charging, \$battery_voltage, \$battery_health.",
+    "battery:battery_low" to "VERO quando la batteria è al 20% o meno.\n\n" +
+        "Utile per attivare azioni quando il telefono è scarico.",
+    "battery:battery_charging" to "VERO quando il telefono è in carica.\n\n" +
+        "Utile per attivare azioni solo durante la ricarica.",
+    "battery:battery<=" to "VERO quando la batteria è sotto o uguale alla soglia.\n\n" +
+        "Configura una percentuale personalizzata (es. 30%).",
+    "battery:battery>=" to "VERO quando la batteria è sopra o uguale alla soglia.\n\n" +
+        "Configura una percentuale personalizzata (es. 80%).",
+    "trigger:timer" to "Il progetto viene valutato automaticamente ogni minuto.\n\n" +
+        "Ideale per automazioni basate su tempo, meteo, o sensori\n" +
+        "che non dipendono dallo stato della batteria.",
+    "trigger:orario" to "Il progetto viene eseguito a un orario specifico.\n\n" +
+        "Configura ora e minuto (es. 07:00 o 23:00).\n" +
+        "Ideale per routine giornaliere fisse.",
+    "trigger:battery" to "Il progetto viene valutato ogni volta che la batteria cambia.\n\n" +
+        "Le variabili \$battery_percentage, \$battery_temp,\n" +
+        "\$battery_charging sono automaticamente disponibili.",
+    "trigger:manual" to "Il progetto viene eseguito solo quando premi \"Esegui\".\n\n" +
+        "Ideale per testare la logica o per azioni che vuoi\n" +
+        "controllare tu manualmente."
+)
+
+private fun getHelpText(helpKey: String): String {
+    val exact = helpTexts[helpKey]
+    if (exact != null) return exact
+    val prefix = helpKey.split(":").let { it[0] + ":" }
+    return helpTexts[prefix] ?: helpTexts["condition:"] ?: "Usa questo blocco per creare la tua automazione."
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,6 +245,7 @@ fun PlaygroundScreen(
     var canvasBounds by remember { mutableStateOf(Rect.Zero) }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var dragPreview by remember { mutableStateOf<DragPreview?>(null) }
+    var helpDialogKey by remember { mutableStateOf<String?>(null) }
 
     val currentProject = projects.firstOrNull { it.id == selectedProjectId } ?: projects.first()
     val otherProjects = projects.filterNot { it.id == currentProject.id }
@@ -166,11 +283,31 @@ fun PlaygroundScreen(
             }
             add(
                 Section(
+                    title = "API",
+                    blocks = listOf(
+                        BlockTemplate("http_request", "HTTP Request", "Chiama API esterna", config = "weather")
+                    )
+                )
+            )
+            add(
+                Section(
+                    title = "Batteria",
+                    blocks = listOf(
+                        BlockTemplate("condition", "Batteria <=", "Soglia personalizzata", config = "battery<="),
+                        BlockTemplate("condition", "Batteria >=", "Soglia personalizzata", config = "battery>="),
+                        BlockTemplate("condition", "Batteria scarica", "≤ 20%", config = "battery_low"),
+                        BlockTemplate("condition", "In carica", "Stato ricarica", config = "battery_charging")
+                    )
+                )
+            )
+            add(
+                Section(
                     title = "Logica",
                     blocks = listOf(
                         BlockTemplate("logic", "AND", "Tutte le condizioni"),
                         BlockTemplate("logic", "OR", "Basta una condizione"),
-                        BlockTemplate("logic", "NOT", "Negazione logica")
+                        BlockTemplate("logic", "NOT", "Negazione logica"),
+                        BlockTemplate("delay", "Delay", "Attesa temporizzata")
                     )
                 )
             )
@@ -180,9 +317,10 @@ fun PlaygroundScreen(
                     blocks = listOf(
                         BlockTemplate("condition", "Ora", "Fascia oraria", config = "time"),
                         BlockTemplate("condition", "Stagione", "Estate / inverno", config = "season"),
-                        BlockTemplate("condition", "Temperatura", "Soglia termica", config = "temperature"),
-                        BlockTemplate("condition", "Luce accesa", "Stato dispositivo", config = "light_state"),
-                        BlockTemplate("condition", "Presenza", "Sensore presenza", config = "presence")
+                        BlockTemplate("condition", "Temperatura", "Soglia termica (batteria)", config = "temperature"),
+                        BlockTemplate("condition", "Dispositivo", "Stato acceso/spento", config = "device_state"),
+                        BlockTemplate("condition", "Presenza", "Telefono attivo", config = "presence"),
+                        BlockTemplate("condition", "Confronto variabile", "Operatore + valore", config = "variable")
                     )
                 )
             )
@@ -190,12 +328,13 @@ fun PlaygroundScreen(
                 Section(
                     title = "Azioni",
                     blocks = listOf(
-                        BlockTemplate("action", "Apri finestre", "Azione finale", config = "open_windows"),
-                        BlockTemplate("action", "Chiudi finestre", "Azione finale", config = "close_windows"),
+                        BlockTemplate("action", "Apri finestre", "Azione simulata", config = "open_windows"),
+                        BlockTemplate("action", "Chiudi finestre", "Azione simulata", config = "close_windows"),
                         BlockTemplate("action", "Accendi AC", "Climatizzazione", config = "ac_on"),
                         BlockTemplate("action", "Accendi termosifone", "Riscaldamento", config = "heater_on"),
-                        BlockTemplate("action", "Spegni luce", "Azione finale", config = "light_off"),
-                        BlockTemplate("action", "Accendi luce", "Azione finale", config = "light_on")
+                        BlockTemplate("action", "Spegni luce", "Dispositivo Sonoff", config = "light_off"),
+                        BlockTemplate("action", "Accendi luce", "Dispositivo Sonoff", config = "light_on"),
+                        BlockTemplate("action_webhook", "Webhook", "Richiesta HTTP")
                     )
                 )
             )
@@ -235,15 +374,44 @@ fun PlaygroundScreen(
         selectedProjectId = project.id
     }
 
+    fun addExampleProject(example: ExampleProject) {
+        val project = example.create(PlaygroundStore.newId("project"))
+        projects = projects + project
+        selectedProjectId = project.id
+    }
+
     fun addNode(template: BlockTemplate, dropPosition: Offset) {
+        val configJson = when (template.kind) {
+            "http_request" -> """{"url":"https://wttr.in/London?format=j1","method":"GET","jsonPath":"$.current_condition[0].weatherDesc[0].value","outputVar":"meteo"}"""
+            "action_webhook" -> """{"url":"https://example.com/webhook","method":"POST","body":"{}"}"""
+            "delay" -> """{"minutes":5}"""
+            "condition" -> when (template.config) {
+                "variable" -> """{"left":"{variabile}","op":"==","right":"valore"}"""
+                else -> null
+            }
+            else -> null
+        }
+        val label = when {
+            template.kind == "condition" && template.config == "variable" -> "Confronto"
+            template.kind == "http_request" -> "HTTP Request"
+            template.kind == "action_webhook" -> "Webhook"
+            template.kind == "delay" -> "Delay"
+            else -> template.title
+        }
+        val kind = when (template.kind) {
+            "delay" -> "delay"
+            "action_webhook" -> "action_webhook"
+            else -> template.kind
+        }
         val node = PlaygroundNode(
             id = PlaygroundStore.newId("node"),
-            kind = template.kind,
-            label = template.title,
+            kind = kind,
+            label = label,
             x = (dropPosition.x - canvasBounds.left - NODE_W / 2f).coerceIn(10f, (canvasSize.width - NODE_W - 10f).coerceAtLeast(10f)),
             y = (dropPosition.y - canvasBounds.top - NODE_H / 2f).coerceIn(10f, (canvasSize.height - NODE_H - 10f).coerceAtLeast(10f)),
             deviceId = template.deviceId,
             config = template.config,
+            configJson = configJson,
             refProjectId = template.refProjectId
         )
         updateCurrentProject { it.copy(nodes = it.nodes + node) }
@@ -405,7 +573,14 @@ fun PlaygroundScreen(
                                         )
                                         if (project.isRunning) {
                                             Text(
-                                                text = "In esecuzione",
+                                                text = project.triggerType.let { t ->
+                                                    when (t) {
+                                                        "timer" -> "Timer ogni minuto"
+                                                        "orario" -> "Orario fisso"
+                                                        "battery" -> "Trigger batteria"
+                                                        else -> "In esecuzione"
+                                                    }
+                                                },
                                                 color = GreenHealthy,
                                                 style = MaterialTheme.typography.labelSmall
                                             )
@@ -445,10 +620,58 @@ fun PlaygroundScreen(
                     }
                 }
 
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { OutlinedButton(onClick = { applyPreset("estate") }) { Text("Preset estate") } }
-                    item { OutlinedButton(onClick = { applyPreset("caldo") }) { Text("Preset caldo") } }
-                    item { OutlinedButton(onClick = { applyPreset("freddo") }) { Text("Preset freddo") } }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { OutlinedButton(onClick = { applyPreset("estate") }) { Text("Preset estate") } }
+                        item { OutlinedButton(onClick = { applyPreset("caldo") }) { Text("Preset caldo") } }
+                        item { OutlinedButton(onClick = { applyPreset("freddo") }) { Text("Preset freddo") } }
+                    }
+                }
+
+                HorizontalDivider(color = OutlineDark.copy(alpha = 0.25f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Trigger:", color = TextSecondary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    listOf("manual", "battery", "timer", "orario").forEach { t ->
+                        FilterChip(
+                            selected = currentProject.triggerType == t,
+                            onClick = {
+                                updateCurrentProject { it.copy(triggerType = t) }
+                            },
+                            label = { Text(
+                                when (t) {
+                                    "manual" -> "Manuale"
+                                    "battery" -> "Batteria"
+                                    "timer" -> "Timer"
+                                    "orario" -> "Orario"
+                                    else -> t
+                                },
+                                fontSize = 11.sp
+                            ) },
+                            modifier = Modifier.height(28.dp)
+                        )
+                    }
+                }
+                if (currentProject.triggerType == "orario") {
+                    val currentCfg = currentProject.triggerConfig ?: ""
+                    OutlinedTextField(
+                        value = currentCfg,
+                        onValueChange = { newVal ->
+                            updateCurrentProject { p -> p.copy(triggerConfig = newVal) }
+                        },
+                        label = { Text("Orario (HH:MM)", fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
@@ -469,6 +692,7 @@ fun PlaygroundScreen(
                         Sidebar(
                             sections = sections,
                             isLoggedIn = isLoggedIn,
+                            onHelpClick = { helpDialogKey = it },
                             modifier = Modifier.height(240.dp)
                         ) { template ->
                             dragPreview = DragPreview(template, Offset.Zero)
@@ -494,6 +718,7 @@ fun PlaygroundScreen(
                         Sidebar(
                             sections = sections,
                             isLoggedIn = isLoggedIn,
+                            onHelpClick = { helpDialogKey = it },
                             modifier = Modifier.width(292.dp)
                         ) { template ->
                             dragPreview = DragPreview(template, Offset.Zero)
@@ -566,12 +791,177 @@ fun PlaygroundScreen(
             }
         )
     }
+
+    helpDialogKey?.let { key ->
+        HelpDialog(
+            helpKey = key,
+            exampleProject = getExampleForHelpKey(key),
+            onDismiss = { helpDialogKey = null },
+            onCreateExample = { example ->
+                addExampleProject(example)
+                helpDialogKey = null
+            }
+        )
+    }
 }
+
+@Composable
+private fun HelpDialog(
+    helpKey: String,
+    exampleProject: ExampleProject?,
+    onDismiss: () -> Unit,
+    onCreateExample: (ExampleProject) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Come si usa",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = getHelpText(helpKey),
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (exampleProject != null) {
+                    Text(
+                        text = "Clicca sotto per creare un nuovo progetto con questo blocco già configurato.",
+                        color = TextTertiary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = { onCreateExample(exampleProject) },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElegantPurple),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Crea progetto di esempio: ${exampleProject.name}")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Chiudi", color = ElegantPurple)
+            }
+        }
+    )
+}
+
+private fun getExampleForHelpKey(helpKey: String): ExampleProject? {
+    return exampleProjects[helpKey]
+}
+
+private val exampleProjects = mapOf(
+    "http_request:" to ExampleProject("HTTP Request meteo") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "http_request", "HTTP Request", 60f, 112f,
+            config = "weather",
+            configJson = """{"url":"https://wttr.in/London?format=j1","method":"GET","jsonPath":"$.current_condition[0].weatherDesc[0].value","outputVar":"meteo"}""")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Confronto", 320f, 112f,
+            config = "variable",
+            configJson = """{"left":"{meteo}","op":"contains","right":"Sunny"}""")
+        val n3 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Apri finestre", 580f, 112f,
+            config = "open_windows")
+        PlaygroundProject(id = id, name = "Esempio: HTTP Request", nodes = listOf(n1, n2, n3),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id), PlaygroundConnection(n2.id, n3.id)))
+    },
+    "condition:time" to ExampleProject("Ora fissa") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Ora: 22:00", 100f, 112f, config = "time=22:00-23:00")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Spegni luce", 360f, 112f, config = "light_off")
+        PlaygroundProject(id = id, name = "Esempio: Fascia oraria", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)))
+    },
+    "condition:season" to ExampleProject("Stagione inverno") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Inverno", 100f, 112f, config = "season=winter")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Accendi termosifone", 360f, 112f, config = "heater_on")
+        PlaygroundProject(id = id, name = "Esempio: Stagione", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)))
+    },
+    "condition:temperature" to ExampleProject("Caldo") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Temp > 25°C", 100f, 112f, config = "temp_gt_25")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Accendi AC", 360f, 112f, config = "ac_on")
+        PlaygroundProject(id = id, name = "Esempio: Temperatura", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)))
+    },
+    "delay:" to ExampleProject("Luce temporizzata") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Luce accesa", 60f, 80f, config = "device_state")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "delay", "Delay 30 min", 280f, 80f, configJson = """{"minutes":30}""")
+        val n3 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Spegni luce", 500f, 80f, config = "light_off")
+        PlaygroundProject(id = id, name = "Esempio: Delay", nodes = listOf(n1, n2, n3),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id), PlaygroundConnection(n2.id, n3.id)))
+    },
+    "action_webhook:" to ExampleProject("Webhook notifica") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Ora: 23:00", 80f, 112f, config = "time=23:00-23:30")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action_webhook", "Webhook", 340f, 112f,
+            configJson = """{"url":"https://maker.ifttt.com/trigger/bedtime/json","method":"POST","body":"{\"event\":\"buonanotte\"}"}""")
+        PlaygroundProject(id = id, name = "Esempio: Webhook", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)))
+    },
+    "condition:presence" to ExampleProject("Presenza accendi luce") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Presenza", 100f, 112f, config = "presence")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Accendi luce", 360f, 112f, config = "light_on")
+        PlaygroundProject(id = id, name = "Esempio: Presenza", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)))
+    },
+    "condition:device_state" to ExampleProject("Dispositivo acceso") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Dispositivo acceso", 100f, 112f, config = "device_state")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Spegni luce", 360f, 112f, config = "light_off")
+        PlaygroundProject(id = id, name = "Esempio: Dispositivo", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)))
+    },
+    "logic:" to ExampleProject("AND logico") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Ora: 14-18", 60f, 48f, config = "time=14:00-18:00")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Estate", 60f, 178f, config = "season=summer")
+        val n3 = PlaygroundNode(PlaygroundStore.newId("node"), "logic", "AND", 296f, 104f, config = "and")
+        val n4 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Apri finestre", 532f, 104f, config = "open_windows")
+        PlaygroundProject(id = id, name = "Esempio: AND", nodes = listOf(n1, n2, n3, n4),
+            connections = listOf(PlaygroundConnection(n1.id, n3.id), PlaygroundConnection(n2.id, n3.id), PlaygroundConnection(n3.id, n4.id)))
+    },
+    "confronto:" to ExampleProject("Confronto variabile") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "http_request", "HTTP Request", 60f, 112f,
+            config = "weather",
+            configJson = """{"url":"https://wttr.in/London?format=j1","method":"GET","jsonPath":"$.current_condition[0].weatherDesc[0].value","outputVar":"meteo"}""")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "\$meteo contiene Sole", 320f, 112f,
+            config = "variable",
+            configJson = """{"left":"{meteo}","op":"contains","right":"Sunny"}""")
+        val n3 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Apri finestre", 580f, 112f, config = "open_windows")
+        PlaygroundProject(id = id, name = "Esempio: Confronto", nodes = listOf(n1, n2, n3),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id), PlaygroundConnection(n2.id, n3.id)))
+    },
+    "battery:battery_low" to ExampleProject("Batteria scarica accendi presa") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Batteria ≤ 20%", 100f, 112f, config = "battery_low")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Accendi luce", 360f, 112f, config = "light_on")
+        PlaygroundProject(id = id, name = "Esempio: Batteria scarica", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)), triggerType = "battery")
+    },
+    "battery:battery_charging" to ExampleProject("In carica spegni presa") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "In carica", 100f, 112f, config = "battery_charging")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Spegni luce", 360f, 112f, config = "light_off")
+        PlaygroundProject(id = id, name = "Esempio: In carica", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)), triggerType = "battery")
+    },
+    "trigger:timer" to ExampleProject("Timer ogni minuto") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "condition", "Ora: 14-16", 100f, 112f, config = "time=14:00-16:00")
+        val n2 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Apri finestre", 360f, 112f, config = "open_windows")
+        PlaygroundProject(id = id, name = "Esempio: Timer", nodes = listOf(n1, n2),
+            connections = listOf(PlaygroundConnection(n1.id, n2.id)), triggerType = "timer")
+    },
+    "trigger:orario" to ExampleProject("Orario fisso") { id ->
+        val n1 = PlaygroundNode(PlaygroundStore.newId("node"), "action", "Chiudi finestre", 100f, 112f, config = "close_windows")
+        PlaygroundProject(id = id, name = "Esempio: Orario fisso", nodes = listOf(n1),
+            triggerType = "orario", triggerConfig = "23:00")
+    }
+)
 
 @Composable
 private fun Sidebar(
     sections: List<Section>,
     isLoggedIn: Boolean,
+    onHelpClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     onTemplateDragStart: (BlockTemplate) -> Unit
 ) {
@@ -601,7 +991,8 @@ private fun Sidebar(
                             BlockChip(
                                 template = template,
                                 enabled = isLoggedIn || template.kind != "device",
-                                onDragStart = { onTemplateDragStart(template) }
+                                onDragStart = { onTemplateDragStart(template) },
+                                onHelpClick = { onHelpClick(template.helpKey) }
                             )
                         }
                     }
@@ -615,12 +1006,15 @@ private fun Sidebar(
 private fun BlockChip(
     template: BlockTemplate,
     enabled: Boolean,
-    onDragStart: (BlockTemplate) -> Unit
+    onDragStart: (BlockTemplate) -> Unit,
+    onHelpClick: () -> Unit
 ) {
     val bg = when (template.kind) {
         "device" -> ElegantPurple.copy(alpha = 0.16f)
         "logic" -> Color(0xFF4C8FFF).copy(alpha = 0.16f)
-        "action" -> GreenHealthy.copy(alpha = 0.14f)
+        "delay" -> Color(0xFF9C27B0).copy(alpha = 0.16f)
+        "action", "action_webhook" -> GreenHealthy.copy(alpha = 0.14f)
+        "http_request" -> Color(0xFFFF9800).copy(alpha = 0.16f)
         else -> Color(0xFFF5A524).copy(alpha = 0.16f)
     }
 
@@ -642,9 +1036,26 @@ private fun BlockChip(
             }
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
-        Column {
-            Text(template.title, color = if (enabled) TextPrimary else TextTertiary, fontWeight = FontWeight.Bold)
-            Text(template.subtitle, color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(template.title, color = if (enabled) TextPrimary else TextTertiary, fontWeight = FontWeight.Bold)
+                Text(template.subtitle, color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(ElegantPurple.copy(alpha = 0.2f), CircleShape)
+                    .clickable { onHelpClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = "Aiuto",
+                    tint = ElegantPurple,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
         }
     }
 }
@@ -762,7 +1173,9 @@ private fun NodeCard(
     val nodeColor = when (node.kind) {
         "device" -> ElegantPurple
         "logic" -> Color(0xFF4C8FFF)
-        "action" -> GreenHealthy
+        "delay" -> Color(0xFF9C27B0)
+        "action", "action_webhook" -> GreenHealthy
+        "http_request" -> Color(0xFFFF9800)
         else -> Color(0xFFF5A524)
     }
     val isSelected = selectedConnectionSource == node.id
@@ -788,7 +1201,12 @@ private fun NodeCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(node.label, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text(
-                        text = node.kind.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                        text = when (node.kind) {
+                            "delay" -> "Attesa"
+                            "http_request" -> "HTTP Request"
+                            "action_webhook" -> "Webhook"
+                            else -> node.kind.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+                        },
                         color = TextTertiary,
                         style = MaterialTheme.typography.labelSmall
                     )
@@ -799,6 +1217,15 @@ private fun NodeCard(
                 text = when {
                     node.deviceId != null -> "Device ${node.deviceId.take(8)}"
                     node.refProjectId != null -> "Progetto ${node.refProjectId.take(8)}"
+                    node.configJson != null -> {
+                        val cfg = try { org.json.JSONObject(node.configJson) } catch (_: Exception) { null }
+                        when (node.kind) {
+                            "http_request" -> cfg?.optString("url", "").orEmpty().take(30)
+                            "delay" -> "${cfg?.optInt("minutes", 5) ?: 5} min"
+                            "action_webhook" -> cfg?.optString("url", "").orEmpty().take(30)
+                            else -> "configurabile"
+                        }
+                    }
                     !node.config.isNullOrBlank() -> node.config
                     else -> "configurabile"
                 },

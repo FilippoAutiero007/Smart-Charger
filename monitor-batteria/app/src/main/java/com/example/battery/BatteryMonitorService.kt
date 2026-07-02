@@ -85,7 +85,7 @@ class BatteryMonitorService : Service() {
 
     private fun buildForegroundNotification(): Notification {
         return NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_battery)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(getString(R.string.app_name))
             .setContentText("Monitor batteria attivo in background")
             .setPriority(NotificationCompat.PRIORITY_LOW)

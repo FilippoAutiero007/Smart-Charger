@@ -18,6 +18,7 @@ data class PlaygroundNode(
     val y: Float,
     val deviceId: String? = null,
     val config: String? = null,
+    val configJson: String? = null,
     val refProjectId: String? = null
 )
 
@@ -27,6 +28,9 @@ data class PlaygroundProject(
     val nodes: List<PlaygroundNode> = emptyList(),
     val connections: List<PlaygroundConnection> = emptyList(),
     val isRunning: Boolean = false,
+    val triggerType: String = "manual",
+    val triggerConfig: String? = null,
+    val variables: Map<String, String> = emptyMap(),
     val lastRunAt: Long? = null,
     val lastRunStatus: String? = null
 )
@@ -88,6 +92,7 @@ object PlaygroundStore {
                 val n = nodeArr.getJSONObject(i)
                 val deviceId = n.optString("deviceId", "").ifBlank { null }
                 val config = n.optString("config", "").ifBlank { null }
+                val configJson = n.optString("configJson", "").ifBlank { null }
                 add(
                     PlaygroundNode(
                         id = n.getString("id"),
@@ -97,6 +102,7 @@ object PlaygroundStore {
                         y = n.getDouble("y").toFloat(),
                         deviceId = deviceId,
                         config = config,
+                        configJson = configJson,
                         refProjectId = n.optString("refProjectId", "").ifBlank { null }
                     )
                 )
@@ -116,12 +122,22 @@ object PlaygroundStore {
             }
         }
 
+        val rawVars = obj.optJSONObject("variables")
+        val variables = if (rawVars != null) {
+            mutableMapOf<String, String>().apply {
+                rawVars.keys().forEach { key -> put(key, rawVars.getString(key)) }
+            }
+        } else emptyMap()
+
         return PlaygroundProject(
             id = obj.getString("id"),
             name = obj.getString("name"),
             nodes = nodes,
             connections = connections,
             isRunning = obj.optBoolean("isRunning", false),
+            triggerType = obj.optString("triggerType", "manual"),
+            triggerConfig = obj.optString("triggerConfig", "").ifBlank { null },
+            variables = variables,
             lastRunAt = obj.optLong("lastRunAt").takeIf { obj.has("lastRunAt") },
             lastRunStatus = obj.optString("lastRunStatus", "").ifBlank { null }
         )
@@ -139,6 +155,7 @@ object PlaygroundStore {
                     put("y", node.y)
                     node.deviceId?.let { put("deviceId", it) }
                     node.config?.let { put("config", it) }
+                    node.configJson?.let { put("configJson", it) }
                     node.refProjectId?.let { put("refProjectId", it) }
                 }
             )
@@ -154,12 +171,18 @@ object PlaygroundStore {
             )
         }
 
+        val variables = JSONObject()
+        project.variables.forEach { (k, v) -> variables.put(k, v) }
+
         return JSONObject().apply {
             put("id", project.id)
             put("name", project.name)
             put("nodes", nodes)
             put("connections", connections)
             put("isRunning", project.isRunning)
+            put("triggerType", project.triggerType)
+            project.triggerConfig?.let { put("triggerConfig", it) }
+            put("variables", variables)
             project.lastRunAt?.let { put("lastRunAt", it) }
             project.lastRunStatus?.let { put("lastRunStatus", it) }
         }

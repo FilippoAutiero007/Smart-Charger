@@ -71,6 +71,8 @@ import com.example.battery.BatteryMonitorService
 import com.example.battery.LocalLogService
 import com.example.battery.LocalBatteryLog
 import com.example.playground.PlaygroundScreen
+import com.example.playground.PlaygroundWorker
+import com.example.smartdisplay.SmartDisplayScreen
 import com.example.ui.theme.Amber500
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
@@ -117,11 +119,13 @@ class MainActivity : ComponentActivity() {
         ensureBatteryMonitorService()
         // Schedula il monitoraggio periodico in background all'avvio dell'app
         scheduleBackgroundBatteryCheck(applicationContext)
+        PlaygroundWorker.schedule(applicationContext)
 
         setContent {
             MyApplicationTheme {
                 val context = LocalContext.current
-                
+                var screen by remember { mutableStateOf("smartdisplay") }
+
                 // Gestione SharedPreferences
                 val sharedPrefs = remember {
                     context.getSharedPreferences(BatteryCheckWorker.PREFS_NAME, Context.MODE_PRIVATE)
@@ -134,7 +138,6 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(sharedPrefs.getBoolean(BatteryCheckWorker.KEY_ENABLED, true))
                 }
 
-                // Monitoriamo le modifiche ai parametri per salvarli real-time
                 LaunchedEffect(threshold) {
                     sharedPrefs.edit().putInt(BatteryCheckWorker.KEY_THRESHOLD, threshold).apply()
                 }
@@ -143,7 +146,6 @@ class MainActivity : ComponentActivity() {
                     sharedPrefs.edit().putBoolean(BatteryCheckWorker.KEY_ENABLED, notificationsEnabled).apply()
                 }
 
-                // Stato dei permessi di notifica
                 var hasNotificationPermission by remember {
                     mutableStateOf(
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -168,17 +170,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Richiesta automatica all'avvio per Android 13+
                 LaunchedEffect(Unit) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = MaterialTheme.colorScheme.background
-                ) { innerPadding ->
+                if (screen == "smartdisplay") {
+                    SmartDisplayScreen(
+                        onNavigateToDashboard = { screen = "dashboard" }
+                    )
+                } else {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = MaterialTheme.colorScheme.background
+                    ) { innerPadding ->
                     BatteryMonitorContent(
                         batteryState = batteryState.value,
                         threshold = threshold,
@@ -196,10 +202,12 @@ class MainActivity : ComponentActivity() {
                         onSendTestNotification = {
                             sendInstantNotification(context, batteryState.value.percentage, threshold)
                         },
+                        onNavigateToSmartDisplay = { screen = "smartdisplay" },
                         innerPadding = innerPadding
                     )
                 }
             }
+        }
         }
     }
 
@@ -333,6 +341,7 @@ fun BatteryMonitorContent(
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onRequestPermission: () -> Unit,
     onSendTestNotification: () -> Unit,
+    onNavigateToSmartDisplay: () -> Unit = {},
     innerPadding: PaddingValues
 ) {
     val context = LocalContext.current
@@ -1002,6 +1011,34 @@ fun BatteryMonitorContent(
                             text = "Opzioni",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = if (activeTab == "opzioni") FontWeight.ExtraBold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = com.example.ui.theme.BackgroundDark,
+                        selectedTextColor = com.example.ui.theme.ElegantPurple,
+                        indicatorColor = com.example.ui.theme.ElegantPurple,
+                        unselectedIconColor = com.example.ui.theme.TextTertiary,
+                        unselectedTextColor = com.example.ui.theme.TextTertiary
+                    )
+                )
+
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { onNavigateToSmartDisplay() },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.DarkMode,
+                            contentDescription = "Smart Display",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = "Display",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Medium,
                                 fontSize = 13.sp
                             )
                         )

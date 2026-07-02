@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.playground.PlaygroundWorker
 import java.util.concurrent.TimeUnit
 
 class BootReceiver : BroadcastReceiver() {
@@ -27,6 +28,8 @@ class BootReceiver : BroadcastReceiver() {
                 ExistingPeriodicWorkPolicy.KEEP,
                 workRequest
             )
+
+            PlaygroundWorker.schedule(context)
         }
     }
 }
