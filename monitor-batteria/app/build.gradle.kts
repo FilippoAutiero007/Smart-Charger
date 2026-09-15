@@ -14,8 +14,8 @@ android {
     applicationId = "com.aistudio.batterymonitor.kzhpqr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "2.0"
+    versionCode = 6
+    versionName = "2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -24,9 +24,9 @@ android {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD") ?: if (file(keystorePath).name == "debug.keystore") "android" else null
+      keyAlias = System.getenv("KEY_ALIAS") ?: if (file(keystorePath).name == "debug.keystore") "androiddebugkey" else "upload"
+      keyPassword = System.getenv("KEY_PASSWORD") ?: if (file(keystorePath).name == "debug.keystore") "android" else null
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")

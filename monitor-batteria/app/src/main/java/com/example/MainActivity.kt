@@ -1695,7 +1695,10 @@ fun SonoffSettingsSection() {
                                             emailStatus = "Invio in corso..."
                                             Thread {
                                                 try {
-                                                    val client = OkHttpClient()
+                                                    val client = OkHttpClient.Builder()
+                                                        .connectTimeout(60, TimeUnit.SECONDS)
+                                                        .readTimeout(60, TimeUnit.SECONDS)
+                                                        .build()
                                                     val json = JSONObject().apply { put("email", email) }
                                                     val body = json.toString().toRequestBody("application/json".toMediaType())
                                                     val request = Request.Builder()
@@ -1752,7 +1755,10 @@ fun SonoffSettingsSection() {
                                             emailStatus = "Verifica in corso..."
                                             Thread {
                                                 try {
-                                                    val client = OkHttpClient()
+                                                    val client = OkHttpClient.Builder()
+                                                        .connectTimeout(60, TimeUnit.SECONDS)
+                                                        .readTimeout(60, TimeUnit.SECONDS)
+                                                        .build()
                                                     val request = Request.Builder()
                                                         .url("$serverUrl/check-code/$authCode")
                                                         .build()
@@ -1840,7 +1846,10 @@ fun SonoffSettingsSection() {
                                 deviceLoadError = ""
                                 Thread {
                                     try {
-                                        val client = OkHttpClient()
+                                        val client = OkHttpClient.Builder()
+                                            .connectTimeout(60, TimeUnit.SECONDS)
+                                            .readTimeout(60, TimeUnit.SECONDS)
+                                            .build()
                                         val request = Request.Builder()
                                             .url("$serverUrl/devices?accessToken=$accessToken&region=$region")
                                             .build()
