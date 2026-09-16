@@ -1543,6 +1543,7 @@ fun SonoffDeviceSection() {
     var email by remember { mutableStateOf("") }
     var authCode by remember { mutableStateOf("") }
     var emailStatus by remember { mutableStateOf("") }
+    var loginUrlState by remember { mutableStateOf("") }
     var testMailStatus by remember { mutableStateOf("") }
     var showEmailLogin by remember { mutableStateOf(false) }
     var deviceList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
@@ -1704,13 +1705,21 @@ fun SonoffDeviceSection() {
                                                     val result = JSONObject(responseBody)
                                                     if (result.has("code")) {
                                                         val code = result.getString("code")
-                                                        authCode = code
-                                                        emailStatus = "Codice ricevuto: $code"
+                                                        val url = result.optString("loginUrl", "")
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            authCode = code
+                                                            loginUrlState = url
+                                                            emailStatus = "Codice: $code — Mail in arrivo (10-60s, controlla spam). Se non arriva, usa il link qui sotto."
+                                                        }
                                                     } else {
-                                                        emailStatus = "Non inviata. Verifica email e riprova."
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            emailStatus = "Non inviata. Verifica email e riprova."
+                                                        }
                                                     }
                                                 } catch (e: Exception) {
-                                                    emailStatus = "Non inviata. Controlla connessione."
+                                                    Handler(Looper.getMainLooper()).post {
+                                                        emailStatus = "Non inviata. Controlla connessione."
+                                                    }
                                                 }
                                             }.start()
                                         },
@@ -1823,6 +1832,31 @@ fun SonoffDeviceSection() {
                                             com.example.ui.theme.RedAlert
                                         else
                                             com.example.ui.theme.TextSecondary
+                                    )
+                                }
+
+                                if (loginUrlState.isNotBlank()) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(loginUrlState))
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {
+                                                Toast.makeText(context, "Impossibile aprire link", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.ElegantPurple)
+                                    ) {
+                                        Icon(Icons.Default.OpenInBrowser, contentDescription = "Apri link autorizzazione", modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Apri link", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text(
+                                        text = "Se la mail non arriva entro 60s, usa il link. Controlla spam.",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                        color = com.example.ui.theme.TextTertiary
                                     )
                                 }
 
@@ -2192,6 +2226,12 @@ fun AutomationSection(
     LaunchedEffect(onThreshold) { sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, onThreshold).apply() }
     LaunchedEffect(offThreshold) { sonoffPrefs.edit().putInt(SonoffController.KEY_OFF_THRESHOLD, offThreshold).apply() }
 
+    // Verifica login eWeLink per bloccare soglie se non autenticato
+    val deviceIdCheck = sonoffPrefs.getString(SonoffController.KEY_DEVICE_ID, "") ?: ""
+    val accessTokenCheck = sonoffPrefs.getString(SonoffController.KEY_ACCESS_TOKEN, "") ?: ""
+    val atExpiryCheck = sonoffPrefs.getLong(SonoffController.KEY_AT_EXPIRY, 0)
+    val hasValidLogin = deviceIdCheck.isNotEmpty() && accessTokenCheck.isNotEmpty() && atExpiryCheck > System.currentTimeMillis()
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Gruppo 1: Notifiche (unico obiettivo)
         Card(
@@ -2265,6 +2305,28 @@ fun AutomationSection(
                 )
                 HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.35f))
 
+                if (!hasValidLogin) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.RedAlert.copy(alpha = 0.1f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.RedAlert.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Lock, contentDescription = "Bloccato", tint = com.example.ui.theme.RedAlert, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = "Fai login con eWeLink in Sonoff per sbloccare.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                                color = com.example.ui.theme.RedAlert
+                            )
+                        }
+                    }
+                }
+
                 // ACCENDI
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
@@ -2282,6 +2344,7 @@ fun AutomationSection(
                         onValueChange = { onThreshold = it.toInt().coerceAtMost(offThreshold - 5) },
                         valueRange = 5f..95f,
                         steps = 90,
+                        enabled = hasValidLogin,
                         colors = SliderDefaults.colors(thumbColor = com.example.ui.theme.GreenHealthy, activeTrackColor = com.example.ui.theme.GreenHealthy, inactiveTrackColor = com.example.ui.theme.OutlineDark)
                     )
                 }
@@ -2303,6 +2366,7 @@ fun AutomationSection(
                         onValueChange = { offThreshold = it.toInt().coerceAtLeast(onThreshold + 5) },
                         valueRange = 10f..100f,
                         steps = 90,
+                        enabled = hasValidLogin,
                         colors = SliderDefaults.colors(thumbColor = com.example.ui.theme.RedAlert, activeTrackColor = com.example.ui.theme.RedAlert, inactiveTrackColor = com.example.ui.theme.OutlineDark)
                     )
                 }
@@ -2320,6 +2384,7 @@ fun AutomationSection(
                 ) {
                     OutlinedButton(
                         onClick = { showResetConfirm = true },
+                        enabled = hasValidLogin,
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.TextSecondary)
@@ -2333,6 +2398,7 @@ fun AutomationSection(
                             sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, onThreshold).putInt(SonoffController.KEY_OFF_THRESHOLD, offThreshold).apply()
                             Toast.makeText(context, "Salvato: $onThreshold% / $offThreshold%", Toast.LENGTH_SHORT).show()
                         },
+                        enabled = hasValidLogin,
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)

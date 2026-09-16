@@ -37,13 +37,20 @@ function buildFromAddress() {
 let gmailTransporter = null
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
   gmailTransporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    requireTLS: true,
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   })
   gmailTransporter.verify().then(() => {
-    console.log(`[gmail] transporter verificato per ${MAIL_FROM_NAME} <${GMAIL_USER}>`)
+    console.log(`[gmail] transporter verificato per ${MAIL_FROM_NAME} <${GMAIL_USER}> via smtp.gmail.com:587`)
   }).catch(err => {
-    console.error(`[gmail] verifica fallita per ${GMAIL_USER}:`, err.message)
+    console.error(`[gmail] verifica fallita per ${GMAIL_USER}:`, err.message, err.code || '')
+    console.error(`[gmail] suggerimento: verifica App Password (16 char, spazi rimossi) e 2FA attivo su myaccount.google.com/apppasswords`)
   })
 }
 
@@ -176,7 +183,7 @@ app.post('/test-mail', async (req, res) => {
     if (gmailTransporter) {
       const info = await Promise.race([
         gmailTransporter.sendMail({ from: fromAddr, to: email, subject: 'VoltGuard Pro — Test Mail OK', html: testHtml }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout SMTP 10s')), 10000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout SMTP 15s - verifica App Password e rete Render')), 15000))
       ])
       console.log(`[test-mail-gmail] inviata a ${email} messageId=${info.messageId}`)
       return res.json({ success: true, mailer: 'gmail', from: fromAddr, messageId: info.messageId })
@@ -192,8 +199,8 @@ app.post('/test-mail', async (req, res) => {
       return res.json({ success: false, error: 'Nessun mailer configurato (GMAIL_USER/RESEND_API_KEY mancanti)', mailer: 'none' })
     }
   } catch (err) {
-    console.error('test-mail error:', err)
-    return res.status(500).json({ success: false, error: err.message })
+    console.error('test-mail error:', err.message, err.code || '', err.response || '')
+    return res.status(500).json({ success: false, error: err.message + (err.code ? ` (code ${err.code})` : ''), hint: 'Verifica GMAIL_APP_PASSWORD (16 char), 2FA attivo, e che la mail non sia in spam' })
   }
 })
 
@@ -323,7 +330,7 @@ app.get('/devices', async (req, res) => {
 
 app.get('/health', (req, res) => {
   const mailer = gmailTransporter ? `gmail:${MAIL_FROM_NAME}` : resend ? 'resend' : 'none'
-  res.json({ status: 'ok', pending: pendingLogins.size, completed: completedLogins.size, version: 'v7-gmail-testmail', mailer, fromName: MAIL_FROM_NAME })
+  res.json({ status: 'ok', pending: pendingLogins.size, completed: completedLogins.size, version: 'v8-gmail-587-fix', mailer, fromName: MAIL_FROM_NAME })
 })
 
 app.listen(PORT, () => {
