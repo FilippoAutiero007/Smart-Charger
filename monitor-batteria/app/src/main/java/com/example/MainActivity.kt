@@ -795,7 +795,7 @@ fun BatteryMonitorContent(
                                         ) {
                                             Icon(
                                                 imageVector = if (log.isCharging) Icons.Default.Refresh else Icons.Default.Warning,
-                                                contentDescription = null,
+                                                contentDescription = if (log.isCharging) "In carica" else "In scarica",
                                                 tint = if (log.isCharging) com.example.ui.theme.GreenHealthy else com.example.ui.theme.ElegantPurple,
                                                 modifier = Modifier.size(14.dp)
                                             )
@@ -827,7 +827,7 @@ fun BatteryMonitorContent(
                                     }
 
                                     if (index < localLogs.value.size - 1) {
-                                        HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.2f))
+                                        HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.35f))
                                     }
                                 }
                             }
@@ -894,7 +894,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.Home,
                         contentDescription = "Stato",
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 },
                 label = {
@@ -922,7 +922,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.List,
                         contentDescription = "Grafici",
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 },
                 label = {
@@ -950,7 +950,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.Power,
                         contentDescription = "Sonoff",
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 },
                 label = {
@@ -978,7 +978,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.Tune,
                         contentDescription = "Automazione",
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 },
                 label = {
@@ -1026,7 +1026,7 @@ fun BatteryDetailRow(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 tint = iconColor,
                 modifier = Modifier.size(16.dp)
             )
@@ -1826,7 +1826,7 @@ fun SonoffDeviceSection() {
                                     )
                                 }
 
-                                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.2f))
+                                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.35f))
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1864,7 +1864,7 @@ fun SonoffDeviceSection() {
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.ElegantPurple)
                                     ) {
-                                        Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Email, contentDescription = "Test mail", modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text("TEST MAIL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
@@ -2235,7 +2235,7 @@ fun AutomationSection(
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(18.dp), tint = com.example.ui.theme.BackgroundDark)
+                    Icon(Icons.Default.Notifications, contentDescription = "Prova notifica", modifier = Modifier.size(18.dp), tint = com.example.ui.theme.BackgroundDark)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Prova notifica", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = com.example.ui.theme.BackgroundDark)
                 }
@@ -2263,7 +2263,7 @@ fun AutomationSection(
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
                     color = com.example.ui.theme.TextTertiary
                 )
-                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.2f))
+                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.35f))
 
                 // ACCENDI
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2324,7 +2324,7 @@ fun AutomationSection(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.TextSecondary)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Refresh, contentDescription = "Reimposta soglie", modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Reimposta", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     }
@@ -2337,28 +2337,24 @@ fun AutomationSection(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Check, contentDescription = "Salva soglie", modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Salva", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                if (showResetConfirm) {
-                    AlertDialog(
-                        onDismissRequest = { showResetConfirm = false },
-                        title = { Text("Reimpostare?", fontWeight = FontWeight.Bold) },
-                        text = { Text("Ripristinare soglie a 20% / 80%? Azione irreversibile.", fontSize = 16.sp) },
-                        confirmButton = {
-                            Button(onClick = {
-                                onThreshold = 20; offThreshold = 80
-                                sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, 20).putInt(SonoffController.KEY_OFF_THRESHOLD, 80).apply()
-                                showResetConfirm = false
-                                Toast.makeText(context, "Reimpostato 20% / 80%", Toast.LENGTH_SHORT).show()
-                            }, colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)) { Text("Conferma") }
-                        },
-                        dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text("Annulla") } }
-                    )
-                }
+                ConfirmActionDialog(
+                    show = showResetConfirm,
+                    title = "Reimpostare?",
+                    text = "Ripristinare soglie a 20% / 80%? Azione irreversibile.",
+                    onConfirm = {
+                        onThreshold = 20; offThreshold = 80
+                        sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, 20).putInt(SonoffController.KEY_OFF_THRESHOLD, 80).apply()
+                        showResetConfirm = false
+                        Toast.makeText(context, "Reimpostato 20% / 80%", Toast.LENGTH_SHORT).show()
+                    },
+                    onDismiss = { showResetConfirm = false }
+                )
             }
         }
 
@@ -2380,12 +2376,39 @@ fun AutomationSection(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Share, contentDescription = "Condividi log diagnostico", modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Invia log", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
+    }
+}
+
+// Funzione unica riutilizzabile per ogni azione irreversibile (reset, elimina log, disconnetti Sonoff)
+// Mantiene coerenza: stessa UI, stesso comportamento ovunque — non crearne altre
+@Composable
+fun ConfirmActionDialog(
+    show: Boolean,
+    title: String,
+    text: String,
+    confirmLabel: String = "Conferma",
+    dismissLabel: String = "Annulla",
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (show) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(title, fontWeight = FontWeight.Bold) },
+            text = { Text(text, fontSize = 16.sp) },
+            confirmButton = {
+                Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)) { Text(confirmLabel) }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text(dismissLabel) }
+            }
+        )
     }
 }
 
