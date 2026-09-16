@@ -116,6 +116,8 @@ class MainActivity : ComponentActivity() {
         ensureBatteryMonitorService()
         // Schedula il monitoraggio periodico in background all'avvio dell'app
         scheduleBackgroundBatteryCheck(applicationContext)
+        // Pulizia log diagnostici >24h all'avvio per non pesare sull'app
+        cleanupOldDiagnosticLogs(applicationContext)
 
         setContent {
             MyApplicationTheme {
@@ -2576,9 +2578,25 @@ private fun shareDiagnosticLog(context: Context) {
 
         val logDir = File(context.getExternalFilesDir(null), "logs")
         if (!logDir.exists()) logDir.mkdirs()
+        // Pulizia automatica file >24h per non pesare sull'app
+        try {
+            val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+            logDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.lastModified() < cutoff) {
+                    Log.d("MainActivity", "cleanup log vecchio 24h: ${f.name}")
+                    f.delete()
+                }
+            }
+            // tieni al massimo 5 file recenti
+            val all = logDir.listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
+            if (all.size > 5) all.drop(5).forEach { it.delete() }
+            val cacheOld = File(context.cacheDir, "last_diagnostic.txt")
+            if (cacheOld.exists() && System.currentTimeMillis() - cacheOld.lastModified() > 24 * 60 * 60 * 1000L) cacheOld.delete()
+        } catch (_: Exception) {}
+
         val logFile = File(logDir, "diagnostic_${System.currentTimeMillis()}.txt")
         FileOutputStream(logFile).use { it.write(sb.toString().toByteArray(Charsets.UTF_8)) }
-        // salva anche copia cache interna per persistenza
+        // salva anche copia cache interna per persistenza (verrà auto-eliminata dopo 24h)
         try {
             val cacheFile = File(context.cacheDir, "last_diagnostic.txt")
             FileOutputStream(cacheFile).use { it.write(sb.toString().toByteArray(Charsets.UTF_8)) }
@@ -2600,6 +2618,27 @@ private fun shareDiagnosticLog(context: Context) {
     } catch (e: Exception) {
         Log.e("MainActivity", "Errore generazione log diagnostico", e)
         Toast.makeText(context, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun cleanupOldDiagnosticLogs(context: Context) {
+    try {
+        val logDir = File(context.getExternalFilesDir(null), "logs")
+        if (logDir.exists()) {
+            val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+            logDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.lastModified() < cutoff) {
+                    Log.d("MainActivity", "cleanup 24h: eliminato ${f.name}")
+                    f.delete()
+                }
+            }
+            val all = logDir.listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
+            if (all.size > 5) all.drop(5).forEach { it.delete() }
+        }
+        val cacheOld = File(context.cacheDir, "last_diagnostic.txt")
+        if (cacheOld.exists() && System.currentTimeMillis() - cacheOld.lastModified() > 24 * 60 * 60 * 1000L) cacheOld.delete()
+    } catch (e: Exception) {
+        Log.e("MainActivity", "cleanup error", e)
     }
 }
 

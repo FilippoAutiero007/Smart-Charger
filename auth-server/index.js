@@ -16,6 +16,8 @@ const APP_SECRET = process.env.APP_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ewelink-auth.com'
 const GMAIL_USER = process.env.GMAIL_USER
+// Google mostra la App Password come "yxyw gmlz llgs icqn" con spazi per leggibilità, ma SMTP vuole senza spazi.
+// Il codice fa .replace(/\s/g,'') così puoi incollarla con o senza spazi, funziona comunque
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.replace(/\s/g, '') : null
 // Nome visualizzato per nascondere info private (es. "VoltGuard Pro" invece di "pippo07pippo")
 const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'VoltGuard Pro'
