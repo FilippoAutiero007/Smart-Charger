@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import eWeLink from 'ewelink-api-next'
 import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 
 const app = express()
 app.use(cors())
@@ -14,8 +15,23 @@ const APP_ID = process.env.APP_ID
 const APP_SECRET = process.env.APP_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ewelink-auth.com'
+const GMAIL_USER = process.env.GMAIL_USER
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.replace(/\s/g, '') : null
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
+
+let gmailTransporter = null
+if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+  gmailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+  })
+  gmailTransporter.verify().then(() => {
+    console.log(`[gmail] transporter verificato per ${GMAIL_USER}`)
+  }).catch(err => {
+    console.error(`[gmail] verifica fallita per ${GMAIL_USER}:`, err.message)
+  })
+}
 
 const ewelinkConfig = {
   appId: APP_ID,
@@ -81,20 +97,37 @@ app.post('/request-login', async (req, res) => {
     `
 
     // Risposta immediata per evitare timeout client (60s su app) — email in background
-    res.json({ code, status: 'pending', message: 'Codice generato, email in invio' })
+    res.json({ code, status: 'pending', message: 'Codice generato, email in invio', loginUrl })
 
     // Invio email asincrono fire-and-forget (non blocca la risposta)
-    if (resend) {
+    if (gmailTransporter) {
+      gmailTransporter.sendMail({
+        from: GMAIL_USER,
+        to: email,
+        subject: 'Autorizzazione Sonoff - Codice di accesso',
+        html: emailHtml,
+      }).then(info => {
+        console.log(`[email-gmail] inviata a ${email} code=${code} messageId=${info.messageId}`)
+      }).catch(err => {
+        console.error(`[email-gmail] errore a ${email} code=${code}:`, err.message)
+        console.log(`[email-fallback] To: ${email} Code: ${code} Link: ${loginUrl}`)
+        // fallback a Resend se configurato
+        if (resend) {
+          resend.emails.send({ from: FROM_EMAIL, to: email, subject: 'Autorizzazione Sonoff - Codice di accesso', html: emailHtml })
+            .then(r => console.log(`[email-resend-fallback] inviata a ${email} id=${r?.data?.id || r?.id || 'ok'}`))
+            .catch(e => console.error(`[email-resend-fallback] errore:`, e.message))
+        }
+      })
+    } else if (resend) {
       resend.emails.send({
         from: FROM_EMAIL,
         to: email,
         subject: 'Autorizzazione Sonoff - Codice di accesso',
         html: emailHtml,
       }).then(result => {
-        console.log(`[email] inviata a ${email} code=${code} id=${result?.data?.id || result?.id || 'ok'}`)
+        console.log(`[email-resend] inviata a ${email} code=${code} id=${result?.data?.id || result?.id || 'ok'}`)
       }).catch(err => {
-        console.error(`[email] errore Resend a ${email} code=${code}:`, err.message)
-        // fallback log per debug
+        console.error(`[email-resend] errore a ${email} code=${code}:`, err.message)
         console.log(`[email-fallback] To: ${email} Code: ${code} Link: ${loginUrl}`)
       })
     } else {
@@ -233,11 +266,14 @@ app.get('/devices', async (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', pending: pendingLogins.size, completed: completedLogins.size, version: 'v5-async-email-fix' })
+  const mailer = gmailTransporter ? `gmail:${GMAIL_USER}` : resend ? 'resend' : 'none'
+  res.json({ status: 'ok', pending: pendingLogins.size, completed: completedLogins.size, version: 'v6-gmail-async', mailer })
 })
 
 app.listen(PORT, () => {
   console.log(`Auth server running at ${BASE_URL}`)
   console.log(`Health check: ${BASE_URL}/health`)
-  if (!resend) console.warn('WARNING: RESEND_API_KEY not set — emails printed to console only')
+  if (gmailTransporter) console.log(`Mailer: Gmail via ${GMAIL_USER}`)
+  else if (resend) console.log(`Mailer: Resend via ${FROM_EMAIL}`)
+  else console.warn('WARNING: nessun mailer configurato — GMAIL_USER/GMAIL_APP_PASSWORD o RESEND_API_KEY mancanti, email solo in console')
 })
