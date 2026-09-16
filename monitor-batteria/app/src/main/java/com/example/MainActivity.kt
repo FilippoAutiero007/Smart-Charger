@@ -465,7 +465,7 @@ fun BatteryMonitorContent(
                     ) {
                         val animatedPercent = animateFloatAsState(
                             targetValue = batteryState.percentage / 100f,
-                            animationSpec = tween(durationMillis = 1000),
+                            animationSpec = tween(durationMillis = 300),
                             label = "battery_percentage"
                         )
 
@@ -835,83 +835,46 @@ fun BatteryMonitorContent(
                     }
                 }
 
-                "opzioni" -> {
-                    // TAB OPZIONI: GENERAL ALERTS & CONVEX BACKEND SYNCHRONIZER
+                "sonoff" -> {
+                    // TAB SONOFF: unico obiettivo = collega e prova il dispositivo
                     Text(
-                        text = "Configurazioni Allerte",
+                        text = "Controllo Sonoff",
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         color = com.example.ui.theme.TextPrimary,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Text(
+                        text = "Collega il tuo Sonoff e prova accensione e spegnimento.",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
+                        color = com.example.ui.theme.TextSecondary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SonoffDeviceSection()
+                }
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.CardDark),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineDark.copy(alpha = 0.4f)),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Invia Notifiche Allerta",
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = com.example.ui.theme.TextPrimary
-                                    )
-                                    Text(
-                                        text = "Ricevi avvisi se sotto le soglie stabilite.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = com.example.ui.theme.TextTertiary
-                                    )
-                                }
-                                Switch(
-                                    checked = notificationsEnabled,
-                                    onCheckedChange = onNotificationsEnabledChange,
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = com.example.ui.theme.ElegantPurple,
-                                        checkedTrackColor = com.example.ui.theme.ElegantPurple.copy(alpha = 0.3f)
-                                    )
-                                )
-                            }
-
-                            HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.4f))
-
-                            Button(
-                                onClick = onSendTestNotification,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = "Test Notification",
-                                    tint = com.example.ui.theme.BackgroundDark,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Invia Notifica Prova",
-                                    fontWeight = FontWeight.Bold,
-                                    color = com.example.ui.theme.BackgroundDark
-                                )
-                            }
-                        }
-                    }
-
+                "auto" -> {
+                    // TAB AUTOMAZIONE: unico obiettivo = configura soglie automatiche e notifiche
+                    Text(
+                        text = "Automazione",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                        color = com.example.ui.theme.TextPrimary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "Scegli quando accendere e spegnere. Max 3 tap.",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
+                        color = com.example.ui.theme.TextSecondary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
-                    SonoffSettingsSection()
-
+                    AutomationSection(
+                        notificationsEnabled = notificationsEnabled,
+                        onNotificationsEnabledChange = onNotificationsEnabledChange,
+                        onSendTestNotification = onSendTestNotification
+                    )
                 }
             }
         }
@@ -931,7 +894,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.Home,
                         contentDescription = "Stato",
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 },
                 label = {
@@ -939,7 +902,7 @@ fun BatteryMonitorContent(
                         text = "Stato",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (activeTab == "stato") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
                     )
                 },
@@ -959,7 +922,7 @@ fun BatteryMonitorContent(
                     Icon(
                         imageVector = Icons.Default.List,
                         contentDescription = "Grafici",
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 },
                 label = {
@@ -967,7 +930,7 @@ fun BatteryMonitorContent(
                         text = "Grafici",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (activeTab == "grafici") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
                     )
                 },
@@ -981,21 +944,49 @@ fun BatteryMonitorContent(
             )
 
             NavigationBarItem(
-                selected = activeTab == "opzioni",
-                onClick = { activeTab = "opzioni" },
+                selected = activeTab == "sonoff",
+                onClick = { activeTab = "sonoff" },
                 icon = {
                     Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Opzioni",
-                        modifier = Modifier.size(32.dp)
+                        imageVector = Icons.Default.Power,
+                        contentDescription = "Sonoff",
+                        modifier = Modifier.size(28.dp)
                     )
                 },
                 label = {
                     Text(
-                        text = "Opzioni",
+                        text = "Sonoff",
                         style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (activeTab == "opzioni") FontWeight.ExtraBold else FontWeight.Medium,
-                            fontSize = 13.sp
+                            fontWeight = if (activeTab == "sonoff") FontWeight.ExtraBold else FontWeight.Medium,
+                            fontSize = 14.sp
+                        )
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = com.example.ui.theme.BackgroundDark,
+                    selectedTextColor = com.example.ui.theme.ElegantPurple,
+                    indicatorColor = com.example.ui.theme.ElegantPurple,
+                    unselectedIconColor = com.example.ui.theme.TextTertiary,
+                    unselectedTextColor = com.example.ui.theme.TextTertiary
+                )
+            )
+
+            NavigationBarItem(
+                selected = activeTab == "auto",
+                onClick = { activeTab = "auto" },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Automazione",
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        text = "Auto",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = if (activeTab == "auto") FontWeight.ExtraBold else FontWeight.Medium,
+                            fontSize = 14.sp
                         )
                     )
                 },
@@ -1529,7 +1520,7 @@ fun BatteryTrendChart(logs: List<LocalBatteryLog>) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SonoffSettingsSection() {
+fun SonoffDeviceSection() {
     val context = LocalContext.current
     val sonoffPrefs = remember {
         context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
@@ -1716,11 +1707,10 @@ fun SonoffSettingsSection() {
                                                         authCode = code
                                                         emailStatus = "Codice ricevuto: $code"
                                                     } else {
-                                                        val err = result.optString("error", "Errore sconosciuto")
-                                                        emailStatus = "Errore: $err"
+                                                        emailStatus = "Non inviata. Verifica email e riprova."
                                                     }
                                                 } catch (e: Exception) {
-                                                    emailStatus = "Errore: ${e.message}"
+                                                    emailStatus = "Non inviata. Controlla connessione."
                                                 }
                                             }.start()
                                         },
@@ -1803,12 +1793,12 @@ fun SonoffSettingsSection() {
                                                             showEmailLogin = false
                                                         }
                                                     } else if (status == "pending") {
-                                                        emailStatus = "In attesa... Fai il login nel browser e reinserisci il codice"
+                                                        emailStatus = "In attesa. Apri la mail e autorizza."
                                                     } else {
-                                                        emailStatus = "Codice non valido o scaduto"
+                                                        emailStatus = "Codice non valido. Richiedi uno nuovo."
                                                     }
                                                 } catch (e: Exception) {
-                                                    emailStatus = "Errore: ${e.message}"
+                                                    emailStatus = "Verifica fallita. Riprova."
                                                 }
                                             }.start()
                                         },
@@ -1923,12 +1913,12 @@ fun SonoffSettingsSection() {
                                             deviceList = list
                                             loadingDevices = false
                                             deviceDropdownExpanded = list.isNotEmpty()
-                                            if (list.isEmpty()) deviceLoadError = "Nessun dispositivo trovato"
+                                            if (list.isEmpty()) deviceLoadError = "Nessun dispositivo. Verifica account."
                                         }
                                     } catch (e: Exception) {
                                         Handler(Looper.getMainLooper()).post {
                                             loadingDevices = false
-                                            deviceLoadError = "Errore: ${e.message}"
+                                            deviceLoadError = "Caricamento fallito. Riprova."
                                         }
                                     }
                                 }.start()
@@ -2102,7 +2092,7 @@ fun SonoffSettingsSection() {
                         Button(
                             onClick = {
                                 if (deviceId.isEmpty()) {
-                                    manualTestStatus = "Nessun dispositivo selezionato"
+                                    manualTestStatus = "Seleziona un dispositivo."
                                     return@Button
                                 }
                                 manualTestStatus = "Accensione..."
@@ -2111,11 +2101,11 @@ fun SonoffSettingsSection() {
                                         val controller = SonoffController(context)
                                         val ok = controller.turnOn(deviceId)
                                         Handler(Looper.getMainLooper()).post {
-                                            manualTestStatus = if (ok) "ON inviato!" else "Errore ON"
+                                            manualTestStatus = if (ok) "Acceso!" else "Non acceso. Verifica rete e token."
                                         }
                                     } catch (e: Exception) {
                                         Handler(Looper.getMainLooper()).post {
-                                            manualTestStatus = "Errore: ${e.message}"
+                                            manualTestStatus = "Errore accensione. Riprova."
                                         }
                                     }
                                 }.start()
@@ -2124,18 +2114,18 @@ fun SonoffSettingsSection() {
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = com.example.ui.theme.GreenHealthy
                             ),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f).height(48.dp)
                         ) {
-                            Icon(Icons.Default.Power, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("ON", fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Power, contentDescription = "Accendi", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Accendi", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
 
                         Button(
                             onClick = {
                                 if (deviceId.isEmpty()) {
-                                    manualTestStatus = "Nessun dispositivo selezionato"
+                                    manualTestStatus = "Seleziona un dispositivo."
                                     return@Button
                                 }
                                 manualTestStatus = "Spegnimento..."
@@ -2144,11 +2134,11 @@ fun SonoffSettingsSection() {
                                         val controller = SonoffController(context)
                                         val ok = controller.turnOff(deviceId)
                                         Handler(Looper.getMainLooper()).post {
-                                            manualTestStatus = if (ok) "OFF inviato!" else "Errore OFF"
+                                            manualTestStatus = if (ok) "Spento!" else "Non spento. Verifica rete e token."
                                         }
                                     } catch (e: Exception) {
                                         Handler(Looper.getMainLooper()).post {
-                                            manualTestStatus = "Errore: ${e.message}"
+                                            manualTestStatus = "Errore spegnimento. Riprova."
                                         }
                                     }
                                 }.start()
@@ -2157,19 +2147,19 @@ fun SonoffSettingsSection() {
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = com.example.ui.theme.RedAlert
                             ),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f).height(48.dp)
                         ) {
-                            Icon(Icons.Default.Power, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("OFF", fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Close, contentDescription = "Spegni", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Spegni", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
 
                     if (manualTestStatus.isNotBlank()) {
                         Text(
                             text = manualTestStatus,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
                             color = if (manualTestStatus.contains("invio") || manualTestStatus.contains("!"))
                                 com.example.ui.theme.GreenHealthy
                             else if (manualTestStatus.contains("Errore"))
@@ -2178,155 +2168,221 @@ fun SonoffSettingsSection() {
                         )
                     }
 
-                    HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.4f))
+                    // Spazio bianco tra gruppi per guidare l'occhio
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+    }
+}
 
-                    Text(
-                        text = "Soglie Automatiche",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = com.example.ui.theme.TextPrimary
+@Composable
+fun AutomationSection(
+    notificationsEnabled: Boolean,
+    onNotificationsEnabledChange: (Boolean) -> Unit,
+    onSendTestNotification: () -> Unit
+) {
+    val context = LocalContext.current
+    val sonoffPrefs = remember {
+        context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var onThreshold by remember { mutableStateOf(sonoffPrefs.getInt(SonoffController.KEY_ON_THRESHOLD, 30)) }
+    var offThreshold by remember { mutableStateOf(sonoffPrefs.getInt(SonoffController.KEY_OFF_THRESHOLD, 80)) }
+    var showResetConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(onThreshold) { sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, onThreshold).apply() }
+    LaunchedEffect(offThreshold) { sonoffPrefs.edit().putInt(SonoffController.KEY_OFF_THRESHOLD, offThreshold).apply() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Gruppo 1: Notifiche (unico obiettivo)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.CardDark),
+            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineDark.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Notifiche batteria",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
+                            color = com.example.ui.theme.TextPrimary
+                        )
+                        Text(
+                            text = "Avviso quando la batteria è bassa.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                            color = com.example.ui.theme.TextTertiary
+                        )
+                    }
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = onNotificationsEnabledChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = com.example.ui.theme.ElegantPurple,
+                            checkedTrackColor = com.example.ui.theme.ElegantPurple.copy(alpha = 0.3f)
+                        )
                     )
+                }
+                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.4f))
+                Button(
+                    onClick = onSendTestNotification,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(18.dp), tint = com.example.ui.theme.BackgroundDark)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Prova notifica", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = com.example.ui.theme.BackgroundDark)
+                }
+            }
+        }
 
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Gruppo 2: Soglie Sonoff (unico obiettivo)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.CardDark),
+            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineDark.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = "Soglie automatiche",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                    color = com.example.ui.theme.TextPrimary
+                )
+                Text(
+                    text = "Accende e spegne da solo.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                    color = com.example.ui.theme.TextTertiary
+                )
+                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.2f))
+
+                // ACCENDI
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "ACCENDI se batteria ≤",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = com.example.ui.theme.TextSecondary
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(com.example.ui.theme.GreenHealthy.copy(alpha = 0.15f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "$onThreshold%",
-                                fontWeight = FontWeight.ExtraBold,
-                                color = com.example.ui.theme.GreenHealthy,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                        Text(text = "Accendi se ≤", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp), color = com.example.ui.theme.TextSecondary)
+                        Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(com.example.ui.theme.GreenHealthy.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(text = "$onThreshold%", fontWeight = FontWeight.ExtraBold, color = com.example.ui.theme.GreenHealthy, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp))
                         }
                     }
                     Slider(
                         value = onThreshold.toFloat(),
-                        onValueChange = {
-                            onThreshold = it.toInt().coerceAtMost(offThreshold - 5)
-                        },
+                        onValueChange = { onThreshold = it.toInt().coerceAtMost(offThreshold - 5) },
                         valueRange = 5f..95f,
                         steps = 90,
-                        colors = SliderDefaults.colors(
-                            thumbColor = com.example.ui.theme.GreenHealthy,
-                            activeTrackColor = com.example.ui.theme.GreenHealthy,
-                            inactiveTrackColor = com.example.ui.theme.OutlineDark
-                        )
+                        colors = SliderDefaults.colors(thumbColor = com.example.ui.theme.GreenHealthy, activeTrackColor = com.example.ui.theme.GreenHealthy, inactiveTrackColor = com.example.ui.theme.OutlineDark)
                     )
+                }
 
+                // SPEGNI
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "SPEGNI se batteria ≥",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = com.example.ui.theme.TextSecondary
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(com.example.ui.theme.RedAlert.copy(alpha = 0.15f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "$offThreshold%",
-                                fontWeight = FontWeight.ExtraBold,
-                                color = com.example.ui.theme.RedAlert,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                        Text(text = "Spegni se ≥", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp), color = com.example.ui.theme.TextSecondary)
+                        Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(com.example.ui.theme.RedAlert.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(text = "$offThreshold%", fontWeight = FontWeight.ExtraBold, color = com.example.ui.theme.RedAlert, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp))
                         }
                     }
                     Slider(
                         value = offThreshold.toFloat(),
-                        onValueChange = {
-                            offThreshold = it.toInt().coerceAtLeast(onThreshold + 5)
-                        },
+                        onValueChange = { offThreshold = it.toInt().coerceAtLeast(onThreshold + 5) },
                         valueRange = 10f..100f,
                         steps = 90,
-                        colors = SliderDefaults.colors(
-                            thumbColor = com.example.ui.theme.RedAlert,
-                            activeTrackColor = com.example.ui.theme.RedAlert,
-                            inactiveTrackColor = com.example.ui.theme.OutlineDark
-                        )
+                        colors = SliderDefaults.colors(thumbColor = com.example.ui.theme.RedAlert, activeTrackColor = com.example.ui.theme.RedAlert, inactiveTrackColor = com.example.ui.theme.OutlineDark)
                     )
+                }
 
-                    Text(
-                        text = "Logica: batteria ≤ $onThreshold% → ACCENSIONE • batteria ≥ $offThreshold% → SPEGNIMENTO",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = com.example.ui.theme.TextTertiary,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                Text(
+                    text = "≤ $onThreshold% accende • ≥ $offThreshold% spegne",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                    color = com.example.ui.theme.TextTertiary
+                )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                onThreshold = 20
-                                offThreshold = 80
-                                sonoffPrefs.edit()
-                                    .putInt(SonoffController.KEY_ON_THRESHOLD, 20)
-                                    .putInt(SonoffController.KEY_OFF_THRESHOLD, 80)
-                                    .apply()
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = com.example.ui.theme.TextSecondary
-                            )
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Reset 20/80", fontSize = 12.sp)
-                        }
-
-                        Button(
-                            onClick = {
-                                sonoffPrefs.edit()
-                                    .putInt(SonoffController.KEY_ON_THRESHOLD, onThreshold)
-                                    .putInt(SonoffController.KEY_OFF_THRESHOLD, offThreshold)
-                                    .apply()
-                                Toast.makeText(context, "Soglie salvate: ${onThreshold}% / ${offThreshold}%", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = com.example.ui.theme.ElegantPurple
-                            )
-                        ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Salva", fontSize = 12.sp)
-                        }
-                    }
-
+                // Pulsanti grandi 48dp, thumb-friendly in basso
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     OutlinedButton(
-                        onClick = { shareDiagnosticLog(context) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = com.example.ui.theme.TextSecondary
-                        )
+                        onClick = { showResetConfirm = true },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.TextSecondary)
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Invia log diagnostici", fontSize = 12.sp)
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reimposta", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     }
+                    Button(
+                        onClick = {
+                            sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, onThreshold).putInt(SonoffController.KEY_OFF_THRESHOLD, offThreshold).apply()
+                            Toast.makeText(context, "Salvato: $onThreshold% / $offThreshold%", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Salva", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (showResetConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showResetConfirm = false },
+                        title = { Text("Reimpostare?", fontWeight = FontWeight.Bold) },
+                        text = { Text("Ripristinare soglie a 20% / 80%? Azione irreversibile.", fontSize = 16.sp) },
+                        confirmButton = {
+                            Button(onClick = {
+                                onThreshold = 20; offThreshold = 80
+                                sonoffPrefs.edit().putInt(SonoffController.KEY_ON_THRESHOLD, 20).putInt(SonoffController.KEY_OFF_THRESHOLD, 80).apply()
+                                showResetConfirm = false
+                                Toast.makeText(context, "Reimpostato 20% / 80%", Toast.LENGTH_SHORT).show()
+                            }, colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)) { Text("Conferma") }
+                        },
+                        dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text("Annulla") } }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Gruppo 3: Log
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.CardDark),
+            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineDark.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(text = "Diagnostica", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp), color = com.example.ui.theme.TextPrimary)
+                Text(text = "Invia i dati se qualcosa non va.", style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp), color = com.example.ui.theme.TextTertiary)
+                Button(
+                    onClick = { shareDiagnosticLog(context) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Invia log", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
