@@ -17,8 +17,20 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ewelink-auth.com'
 const GMAIL_USER = process.env.GMAIL_USER
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.replace(/\s/g, '') : null
+// Nome visualizzato per nascondere info private (es. "VoltGuard Pro" invece di "pippo07pippo")
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'VoltGuard Pro'
+const MAIL_FROM = process.env.MAIL_FROM || null // es. "VoltGuard Pro <noreply@voltguard.app>" se dominio verificato
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
+
+function buildFromAddress() {
+  // Priorità: MAIL_FROM env completo > MAIL_FROM_NAME + GMAIL_USER > default
+  if (MAIL_FROM) return MAIL_FROM
+  // Usa display name per nascondere nome privato Google + email reale richiesta da Gmail SMTP
+  // Nota: l'immagine profilo Gmail non si può rimuovere via codice — va rimossa da https://myaccount.google.com/personal-info
+  // impostando nome "VoltGuard Pro" e rimuovendo foto profilo
+  return `"${MAIL_FROM_NAME}" <${GMAIL_USER || FROM_EMAIL}>`
+}
 
 let gmailTransporter = null
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
@@ -27,7 +39,7 @@ if (GMAIL_USER && GMAIL_APP_PASSWORD) {
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
   })
   gmailTransporter.verify().then(() => {
-    console.log(`[gmail] transporter verificato per ${GMAIL_USER}`)
+    console.log(`[gmail] transporter verificato per ${MAIL_FROM_NAME} <${GMAIL_USER}>`)
   }).catch(err => {
     console.error(`[gmail] verifica fallita per ${GMAIL_USER}:`, err.message)
   })
@@ -100,14 +112,17 @@ app.post('/request-login', async (req, res) => {
     res.json({ code, status: 'pending', message: 'Codice generato, email in invio', loginUrl })
 
     // Invio email asincrono fire-and-forget (non blocca la risposta)
+    const fromAddr = buildFromAddress()
     if (gmailTransporter) {
       gmailTransporter.sendMail({
-        from: GMAIL_USER,
+        from: fromAddr,
         to: email,
         subject: 'Autorizzazione Sonoff - Codice di accesso',
         html: emailHtml,
+        // Disabilita tracciamento immagine profilo: Gmail usa avatar del mittente, va rimosso manualmente da account Google
+        headers: { 'X-Mailer': 'VoltGuard Pro' },
       }).then(info => {
-        console.log(`[email-gmail] inviata a ${email} code=${code} messageId=${info.messageId}`)
+        console.log(`[email-gmail] inviata a ${email} code=${code} from=${fromAddr} messageId=${info.messageId}`)
       }).catch(err => {
         console.error(`[email-gmail] errore a ${email} code=${code}:`, err.message)
         console.log(`[email-fallback] To: ${email} Code: ${code} Link: ${loginUrl}`)
@@ -138,6 +153,45 @@ app.post('/request-login', async (req, res) => {
   } catch (err) {
     console.error('request-login error:', err)
     res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/test-mail', async (req, res) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ error: 'Email richiesta per test' })
+    const testHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #eee; border-radius: 12px;">
+        <h2 style="color: #6C63FF;">VoltGuard Pro — Test Mail</h2>
+        <p style="color: #333;">Questa è una mail di prova dal sistema Smart Charger.</p>
+        <p style="color: #666; font-size: 13px;">Inviata il ${new Date().toLocaleString('it-IT')} da ${buildFromAddress()}</p>
+        <p style="color: #888; font-size: 12px;">Se la ricevi, la configurazione email è corretta (mittente: ${MAIL_FROM_NAME}).</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;"/>
+        <p style="color: #aaa; font-size: 11px;">Server: ${BASE_URL} — versione v7</p>
+      </div>
+    `
+    const fromAddr = buildFromAddress()
+    if (gmailTransporter) {
+      const info = await Promise.race([
+        gmailTransporter.sendMail({ from: fromAddr, to: email, subject: 'VoltGuard Pro — Test Mail OK', html: testHtml }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout SMTP 10s')), 10000))
+      ])
+      console.log(`[test-mail-gmail] inviata a ${email} messageId=${info.messageId}`)
+      return res.json({ success: true, mailer: 'gmail', from: fromAddr, messageId: info.messageId })
+    } else if (resend) {
+      const result = await Promise.race([
+        resend.emails.send({ from: FROM_EMAIL, to: email, subject: 'VoltGuard Pro — Test Mail OK', html: testHtml }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout Resend 10s')), 10000))
+      ])
+      console.log(`[test-mail-resend] inviata a ${email} id=${result?.data?.id || result?.id}`)
+      return res.json({ success: true, mailer: 'resend', id: result?.data?.id || result?.id })
+    } else {
+      console.log(`[test-mail] nessun mailer configurato, simulazione a ${email}`)
+      return res.json({ success: false, error: 'Nessun mailer configurato (GMAIL_USER/RESEND_API_KEY mancanti)', mailer: 'none' })
+    }
+  } catch (err) {
+    console.error('test-mail error:', err)
+    return res.status(500).json({ success: false, error: err.message })
   }
 })
 
@@ -266,14 +320,16 @@ app.get('/devices', async (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  const mailer = gmailTransporter ? `gmail:${GMAIL_USER}` : resend ? 'resend' : 'none'
-  res.json({ status: 'ok', pending: pendingLogins.size, completed: completedLogins.size, version: 'v6-gmail-async', mailer })
+  const mailer = gmailTransporter ? `gmail:${MAIL_FROM_NAME}` : resend ? 'resend' : 'none'
+  res.json({ status: 'ok', pending: pendingLogins.size, completed: completedLogins.size, version: 'v7-gmail-testmail', mailer, fromName: MAIL_FROM_NAME })
 })
 
 app.listen(PORT, () => {
   console.log(`Auth server running at ${BASE_URL}`)
   console.log(`Health check: ${BASE_URL}/health`)
-  if (gmailTransporter) console.log(`Mailer: Gmail via ${GMAIL_USER}`)
+  console.log(`Mailer From: ${gmailTransporter ? buildFromAddress() : resend ? FROM_EMAIL : 'none (console only)'}`)
+  if (gmailTransporter) console.log(`Mailer: Gmail via ${MAIL_FROM_NAME} (user nascosto)`)
   else if (resend) console.log(`Mailer: Resend via ${FROM_EMAIL}`)
   else console.warn('WARNING: nessun mailer configurato — GMAIL_USER/GMAIL_APP_PASSWORD o RESEND_API_KEY mancanti, email solo in console')
+  console.log('NOTE immagine profilo: rimuovila da https://myaccount.google.com/personal-info -> imposta nome "VoltGuard Pro" e foto neutra/generica')
 })

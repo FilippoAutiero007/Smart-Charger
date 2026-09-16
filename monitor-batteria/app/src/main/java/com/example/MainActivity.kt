@@ -1550,6 +1550,7 @@ fun SonoffSettingsSection() {
     var email by remember { mutableStateOf("") }
     var authCode by remember { mutableStateOf("") }
     var emailStatus by remember { mutableStateOf("") }
+    var testMailStatus by remember { mutableStateOf("") }
     var showEmailLogin by remember { mutableStateOf(false) }
     var deviceList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var deviceDropdownExpanded by remember { mutableStateOf(false) }
@@ -1830,6 +1831,58 @@ fun SonoffSettingsSection() {
                                             com.example.ui.theme.RedAlert
                                         else
                                             com.example.ui.theme.TextSecondary
+                                    )
+                                }
+
+                                HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.2f))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            testMailStatus = "Invio test in corso..."
+                                            Thread {
+                                                try {
+                                                    val client = OkHttpClient.Builder()
+                                                        .connectTimeout(15, TimeUnit.SECONDS)
+                                                        .readTimeout(15, TimeUnit.SECONDS)
+                                                        .build()
+                                                    val json = JSONObject().apply { put("email", email) }
+                                                    val body = json.toString().toRequestBody("application/json".toMediaType())
+                                                    val request = Request.Builder()
+                                                        .url("$serverUrl/test-mail")
+                                                        .post(body)
+                                                        .build()
+                                                    val response = client.newCall(request).execute()
+                                                    val respBody = response.body?.string() ?: "{}"
+                                                    val result = JSONObject(respBody)
+                                                    val success = result.optBoolean("success", false)
+                                                    val msg = if (success) "TEST OK: mail inviata a $email" else "TEST fallito: ${result.optString("error", "errore")}"
+                                                    Handler(Looper.getMainLooper()).post { testMailStatus = msg }
+                                                } catch (e: Exception) {
+                                                    Handler(Looper.getMainLooper()).post { testMailStatus = "Errore TEST: ${e.message}" }
+                                                }
+                                            }.start()
+                                        },
+                                        enabled = email.isNotBlank(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.ElegantPurple)
+                                    ) {
+                                        Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("TEST MAIL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                if (testMailStatus.isNotBlank()) {
+                                    Text(
+                                        text = testMailStatus,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (testMailStatus.startsWith("TEST OK")) com.example.ui.theme.GreenHealthy else if (testMailStatus.startsWith("Errore") || testMailStatus.startsWith("TEST fallito")) com.example.ui.theme.RedAlert else com.example.ui.theme.TextSecondary
                                     )
                                 }
                             }
@@ -2282,6 +2335,11 @@ private fun shareDiagnosticLog(context: Context) {
     try {
         val sonoffPrefs = context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
         val batteryPrefs = context.getSharedPreferences(BatteryCheckWorker.PREFS_NAME, Context.MODE_PRIVATE)
+        val logPrefs = context.getSharedPreferences("local_battery_logs", Context.MODE_PRIVATE)
+
+        // --- snapshot batteria live ---
+        val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val batteryState = batteryIntent?.let { BatteryMonitor.parseState(it) }
 
         val deviceId = sonoffPrefs.getString(SonoffController.KEY_DEVICE_ID, "") ?: ""
         val accessToken = sonoffPrefs.getString(SonoffController.KEY_ACCESS_TOKEN, "") ?: ""
@@ -2294,70 +2352,237 @@ private fun shareDiagnosticLog(context: Context) {
         val lastCommand = sonoffPrefs.getString(SonoffController.KEY_LAST_COMMAND, "") ?: ""
         val lastStatus = sonoffPrefs.getString(SonoffController.KEY_LAST_STATUS, "") ?: ""
         val region = sonoffPrefs.getString(SonoffController.KEY_REGION, "eu") ?: "eu"
+        val deviceListRaw = sonoffPrefs.getString(SonoffController.KEY_DEVICE_LIST, "") ?: ""
 
         val batteryThreshold = batteryPrefs.getInt(BatteryCheckWorker.KEY_THRESHOLD, -1)
         val batteryEnabled = batteryPrefs.getBoolean(BatteryCheckWorker.KEY_ENABLED, true)
+        val lastNotifiedLevel = batteryPrefs.getInt(BatteryCheckWorker.KEY_LAST_NOTIFIED_LEVEL, -1)
+        val notifiedLow = batteryPrefs.getBoolean(BatteryCheckWorker.KEY_NOTIFIED_LOW, false)
 
         val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         val versionName = pkgInfo.versionName ?: "?"
         val versionCode = pkgInfo.longVersionCode
         val androidVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
-        val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+        val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (${android.os.Build.BRAND} ${android.os.Build.DEVICE})"
+        val hardware = "${android.os.Build.HARDWARE} / ${android.os.Build.BOARD}"
 
-        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ITALY).format(Date())
         val now = System.currentTimeMillis()
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ITALY)
+        val timestamp = sdf.format(Date(now))
+        val tz = java.util.TimeZone.getDefault().id
+        val locale = Locale.getDefault().toString()
+        val elapsed = android.os.SystemClock.elapsedRealtime()
+        val uptimeMin = elapsed / 60000
+        val bootTime = now - elapsed
+        val bootStr = sdf.format(Date(bootTime))
+
+        fun maskToken(t: String): String = if (t.length <= 12) "len=${t.length}" else "${t.take(8)}...${t.takeLast(4)} len=${t.length}"
+        fun expiryStr(expiry: Long): String {
+            if (expiry == 0L) return "MAI IMPOSTATO (0)"
+            val diff = expiry - now
+            val min = diff / 60000
+            val date = sdf.format(Date(expiry))
+            return if (diff > 0) "VALIDO per ${min}min (scade $date)" else "SCADUTO da ${-min}min (era $date)"
+        }
 
         val sb = StringBuilder()
-        sb.appendLine("=== SmartCharger v$versionName ($versionCode) - LOG DIAGNOSTICO ===")
-        sb.appendLine("Generato: $timestamp")
+        sb.appendLine("=== SmartCharger v$versionName ($versionCode) - LOG DIAGNOSTICO COMPLETO ===")
+        sb.appendLine("Generato: $timestamp [$tz] locale=$locale")
+        sb.appendLine("Uptime: ${uptimeMin}min (elapsedRealtime=${elapsed}ms) | Boot: $bootStr")
+        sb.appendLine("Package: ${context.packageName} | Installer: ${try { context.packageManager.getInstallerPackageName(context.packageName) } catch (_: Exception) { "?" }}")
+        sb.appendLine("Processo: ${android.os.Process.myPid()} | Thread: ${Thread.currentThread().name}")
         sb.appendLine("")
-        sb.appendLine("--- DISPOSITIVO ---")
+
+        sb.appendLine("--- 1. QUANDO (temporale) ---")
+        sb.appendLine("Now millis: $now")
+        sb.appendLine("AT expiry: $atExpiry -> ${expiryStr(atExpiry)}")
+        sb.appendLine("RT expiry: $rtExpiry -> ${expiryStr(rtExpiry)}")
+        sb.appendLine("Last boot: $bootStr")
+        sb.appendLine("Timezone: $tz")
+        sb.appendLine("")
+
+        sb.appendLine("--- 2. DISPOSITIVO & BATTERIA LIVE ---")
         sb.appendLine("Marca/Modello: $deviceModel")
+        sb.appendLine("Hardware/Board: $hardware")
         sb.appendLine("OS: $androidVersion")
-        sb.appendLine("Package: ${context.packageName}")
+        sb.appendLine("Fingerprint: ${android.os.Build.FINGERPRINT}")
+        if (batteryState != null) {
+            sb.appendLine("Batteria live: ${batteryState.percentage}% | Charging=${batteryState.isCharging} | Status=${batteryState.status}")
+            sb.appendLine("Sorgente: ${batteryState.plugType} | Salute: ${batteryState.health} | Temp: ${batteryState.temperature}°C | Volt: ${batteryState.voltage}mV")
+        } else {
+            sb.appendLine("Batteria live: N/D (intent null)")
+        }
         sb.appendLine("")
-        sb.appendLine("--- CONFIG SONOFF ---")
-        sb.appendLine("Abilitato: $enabled")
-        sb.appendLine("Device ID: $deviceId")
-        sb.appendLine("Regione: $region")
-        sb.appendLine("Soglia ON (≤): $onThreshold%")
-        sb.appendLine("Soglia OFF (≥): $offThreshold%")
-        sb.appendLine("Ultimo comando inviato: '${lastCommand}'")
-        sb.appendLine("Ultimo status: '$lastStatus'")
-        sb.appendLine("Access Token presente: ${accessToken.isNotEmpty()} (len=${accessToken.length})")
-        sb.appendLine("Refresh Token presente: ${refreshToken.isNotEmpty()} (len=${refreshToken.length})")
-        sb.appendLine("AT expiry: $atExpiry (${if (atExpiry > now) "VALIDO per ${(atExpiry - now) / 60000} min" else "SCADUTO"})")
-        sb.appendLine("RT expiry: $rtExpiry (${if (rtExpiry > now) "VALIDO per ${(rtExpiry - now) / 60000} min" else "SCADUTO"})")
+
+        sb.appendLine("--- 3. DOVE (rete & server) ---")
+        try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val net = cm.activeNetwork
+            val caps = cm.getNetworkCapabilities(net)
+            val isConnected = caps != null
+            val isWifi = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+            val isCell = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true
+            val isEthernet = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
+            sb.appendLine("Rete connessa: $isConnected | Wifi=$isWifi Cell=$isCell Eth=$isEthernet")
+            sb.appendLine("ActiveNetwork: $net | Caps: $caps")
+        } catch (e: Exception) { sb.appendLine("Rete: errore lettura -> ${e.message}") }
+        sb.appendLine("Auth server URL: ${SonoffController.AUTH_SERVER_URL}")
+        sb.appendLine("Regione eWeLink: $region -> ${when(region){"eu"->"https://eu-apia.coolkit.cc";"us"->"https://us-apia.coolkit.cc";"cn"->"https://cn-apia.coolkit.cc";else->"?"}}")
         sb.appendLine("")
-        sb.appendLine("--- CONFIG BATTERIA ---")
+
+        sb.appendLine("--- 4. PERCHÉ (logica automazione) ---")
+        sb.appendLine("Sonoff abilitato: $enabled")
+        sb.appendLine("Soglia ON (≤): $onThreshold% | Soglia OFF (≥): $offThreshold%")
+        sb.appendLine("Ultimo comando: '$lastCommand' | Ultimo status: '$lastStatus'")
+        if (batteryState != null) {
+            val perc = batteryState.percentage
+            val isCharging = batteryState.isCharging
+            val decision = when {
+                !enabled -> "DISABILITATO -> nessun comando"
+                deviceId.isEmpty() || accessToken.isEmpty() -> "CREDENZIALI MANCANTI"
+                perc >= offThreshold && lastCommand != "off" -> "AVREBBE INVIATO OFF (perc $perc >= $offThreshold e last != off)"
+                perc <= onThreshold && lastCommand != "on" -> "AVREBBE INVIATO ON (perc $perc <= $onThreshold e last != on)"
+                perc >= offThreshold -> "OFF già inviato (dead zone alta)"
+                perc <= onThreshold -> "ON già inviato (dead zone bassa)"
+                else -> "DEAD ZONE (${onThreshold+1}..${offThreshold-1}%) -> nessun comando"
+            }
+            sb.appendLine("Batteria attuale: $perc% Charging=$isCharging")
+            sb.appendLine("Decisione attesa: $decision")
+            // analisi problemi soglie
+            if (onThreshold >= offThreshold) sb.appendLine("PROBLEMA: soglia ON >= OFF (configurazione invalida!)")
+            if (perc in (onThreshold+1) until offThreshold) sb.appendLine("Nota: in dead zone, è normale non inviare comandi")
+        }
+        sb.appendLine("")
+
+        sb.appendLine("--- 5. CONFIG SONOFF DETTAGLIO ---")
+        sb.appendLine("Device ID: ${if(deviceId.isEmpty()) "(vuoto)" else deviceId}")
+        sb.appendLine("Device list raw: ${if(deviceListRaw.isEmpty()) "(vuoto)" else "len=${deviceListRaw.length} -> ${deviceListRaw.take(300)}"}")
+        try {
+            val arr = org.json.JSONArray(deviceListRaw)
+            sb.appendLine("Device list count: ${arr.length()}")
+            for (i in 0 until minOf(arr.length(), 5)) {
+                val o = arr.getJSONObject(i)
+                sb.appendLine("  - ${o.optString("name","?")} / ${o.optString("deviceid","?")} type=${o.optString("uiid","?")}")
+            }
+        } catch (_: Exception) { sb.appendLine("Device list: non parsabile o vuota") }
+        sb.appendLine("Access Token: ${if(accessToken.isEmpty()) "ASSENTE" else maskToken(accessToken)} | ${expiryStr(atExpiry)}")
+        sb.appendLine("Refresh Token: ${if(refreshToken.isEmpty()) "ASSENTE" else maskToken(refreshToken)} | ${expiryStr(rtExpiry)}")
+        sb.appendLine("")
+
+        sb.appendLine("--- 6. CONFIG BATTERIA ---")
         sb.appendLine("Notifiche abilitate: $batteryEnabled")
         sb.appendLine("Soglia notifica: $batteryThreshold%")
+        sb.appendLine("NotifiedLow: $notifiedLow | LastNotifiedLevel: $lastNotifiedLevel")
         sb.appendLine("")
-        sb.appendLine("--- WORKMANAGER ---")
-        val wm = WorkManager.getInstance(context)
-        val workInfoList = wm.getWorkInfosForUniqueWork("BatteryMonitorWork").get()
-        if (workInfoList != null && workInfoList.isNotEmpty()) {
-            for (info in workInfoList) {
-                sb.appendLine("Nome: ${info.tags}")
-                sb.appendLine("Stato: ${info.state}")
-                sb.appendLine("RunAttemptCount: ${info.runAttemptCount}")
-                sb.appendLine("")
+
+        sb.appendLine("--- 7. STORICO BATTERIA LOCALE (ultimi 50) ---")
+        try {
+            val logs = LocalLogService.getLogs(context)
+            sb.appendLine("Totale record: ${logs.size}")
+            if (logs.isEmpty()) {
+                sb.appendLine("(nessun dato — WorkManager mai eseguito o log svuotato)")
+            } else {
+                // ultimi 10 dettagliati
+                logs.take(20).forEachIndexed { idx, log ->
+                    val d = sdf.format(Date(log.timestamp))
+                    val ageMin = (now - log.timestamp)/60000
+                    sb.appendLine("#$idx $d ( -${ageMin}min ): ${log.percentage}% ${if(log.isCharging) "CHARGING" else "DISCHARGING"} src=${log.source}")
+                }
+                // trend
+                if (logs.size >= 2) {
+                    val oldest = logs.last()
+                    val newest = logs.first()
+                    val hrs = (newest.timestamp - oldest.timestamp)/3600000.0
+                    val diff = newest.percentage - oldest.percentage
+                    val rate = if (hrs>0) diff/hrs else 0.0
+                    sb.appendLine("Trend: da ${oldest.percentage}% a ${newest.percentage}% in ${"%.2f".format(hrs)}h -> ${"%.2f".format(rate)}%/h")
+                }
             }
-        } else {
-            sb.appendLine("NESSUN WORK REGISTRATO CON TAG 'BatteryMonitorWork'")
-            sb.appendLine("(WorkManager non ha mai schedulato il worker — apri l'app almeno una volta)")
-            sb.appendLine("")
-        }
-        sb.appendLine("--- ISTRUZIONI ---")
-        sb.appendLine("1. Installa questa versione (v$versionName)")
-        sb.appendLine("2. Lascia il telefono in carica fino a superare la soglia OFF")
-        sb.appendLine("3. Se il Sonoff non si spegne automaticamente, apri l'app e tocca di nuovo 'Invia log diagnostici'")
-        sb.appendLine("4. Invia il file .txt generato allo sviluppatore")
+        } catch (e: Exception) { sb.appendLine("Errore lettura log batteria: ${e.message}") }
+        sb.appendLine("")
+
+        sb.appendLine("--- 8. WORKMANAGER ---")
+        try {
+            val wm = WorkManager.getInstance(context)
+            val workInfoList = wm.getWorkInfosForUniqueWork("BatteryMonitorWork").get()
+            if (workInfoList != null && workInfoList.isNotEmpty()) {
+                for (info in workInfoList) {
+                    sb.appendLine("Tags: ${info.tags}")
+                    sb.appendLine("Stato: ${info.state} | isFinished=${info.state.isFinished}")
+                    sb.appendLine("RunAttempt: ${info.runAttemptCount} | Periodicity: 15min")
+                    sb.appendLine("Output: ${info.outputData} | Progress: ${info.progress}")
+                    try { sb.appendLine("Constraints: ${info}") } catch (_: Exception) {}
+                    sb.appendLine("")
+                }
+            } else {
+                sb.appendLine("NESSUN WORK REGISTRATO con tag 'BatteryMonitorWork'")
+                sb.appendLine("PROBLEMA: WorkManager non schedulato — apri l'app e concedi permessi")
+            }
+            // check batteria ottimizzazione
+            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val ignoring = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isIgnoringBatteryOptimizations(context.packageName) else true
+            sb.appendLine("IgnoringBatteryOptimizations: $ignoring ${if(!ignoring) "(PROBLEMA: il sistema può killare il worker)" else ""}")
+        } catch (e: Exception) { sb.appendLine("Errore WorkManager: ${e.message}"); e.printStackTrace() }
+        sb.appendLine("")
+
+        sb.appendLine("--- 9. PERMESSI ---")
+        try {
+            val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else true
+            sb.appendLine("POST_NOTIFICATIONS: $hasNotif ${if(!hasNotif) "(PROBLEMA: notifiche bloccate)" else ""}")
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val ch = nm.getNotificationChannel(BatteryCheckWorker.CHANNEL_ID)
+                sb.appendLine("Notification Channel Battery: ${ch?.importance} enabled=${ch != null}")
+            }
+        } catch (e: Exception) { sb.appendLine("Permessi errore: ${e.message}") }
+        sb.appendLine("")
+
+        sb.appendLine("--- 10. PROBLEMI RILEVATI ---")
+        val problems = mutableListOf<String>()
+        if (!enabled) problems.add("Sonoff disabilitato (switch spento)")
+        if (deviceId.isEmpty()) problems.add("Device ID vuoto — seleziona dispositivo")
+        if (accessToken.isEmpty()) problems.add("Access Token vuoto — rifai login email")
+        if (atExpiry != 0L && atExpiry <= now) problems.add("AT scaduto — serve refresh o re-login")
+        if (rtExpiry != 0L && rtExpiry <= now) problems.add("RT scaduto — serve re-login completo")
+        if (onThreshold >= offThreshold) problems.add("Soglie incoerenti ON >= OFF")
+        if (batteryState == null) problems.add("Impossibile leggere batteria")
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !pm.isIgnoringBatteryOptimizations(context.packageName)) problems.add("Ottimizzazione batteria attiva — può fermare background")
+        } catch (_: Exception) {}
+        if (problems.isEmpty()) sb.appendLine("Nessun problema evidente rilevato")
+        else problems.forEach { sb.appendLine("- $it") }
+        sb.appendLine("")
+
+        sb.appendLine("--- 11. DUMP SHARED PREFERENCES (raw) ---")
+        try {
+            sb.appendLine("SONOFF_PREFS (${sonoffPrefs.all.size} keys):")
+            sonoffPrefs.all.forEach { (k,v) ->
+                val masked = if (k.contains("TOKEN", ignoreCase = true) && v is String && v.length>12) maskToken(v) else v.toString().take(500)
+                sb.appendLine("  $k = $masked")
+            }
+            sb.appendLine("BATTERY_PREFS (${batteryPrefs.all.size} keys):")
+            batteryPrefs.all.forEach { (k,v) -> sb.appendLine("  $k = $v") }
+            sb.appendLine("LOCAL_LOGS_PREFS (${logPrefs.all.size} keys): len=${logPrefs.getString("logs_json","")?.length ?: 0}")
+        } catch (e: Exception) { sb.appendLine("Dump prefs errore: ${e.message}") }
+        sb.appendLine("")
+
+        sb.appendLine("--- 12. ISTRUZIONI ---")
+        sb.appendLine("1. Questo log contiene QUANDO/DOVE/PERCHÉ/PROBLEMI completi")
+        sb.appendLine("2. Cerca PROBLEMI RILEVATI sopra per fix rapido")
+        sb.appendLine("3. Invia questo file allo sviluppatore via TEST MAIL o condivisione")
 
         val logDir = File(context.getExternalFilesDir(null), "logs")
         if (!logDir.exists()) logDir.mkdirs()
         val logFile = File(logDir, "diagnostic_${System.currentTimeMillis()}.txt")
         FileOutputStream(logFile).use { it.write(sb.toString().toByteArray(Charsets.UTF_8)) }
+        // salva anche copia cache interna per persistenza
+        try {
+            val cacheFile = File(context.cacheDir, "last_diagnostic.txt")
+            FileOutputStream(cacheFile).use { it.write(sb.toString().toByteArray(Charsets.UTF_8)) }
+        } catch (_: Exception) {}
 
         val uri: Uri = FileProvider.getUriForFile(
             context,
@@ -2367,10 +2592,11 @@ private fun shareDiagnosticLog(context: Context) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "SmartCharger v$versionName - Log diagnostico")
+            putExtra(Intent.EXTRA_SUBJECT, "SmartCharger v$versionName - Log diagnostico completo ${sdf.format(Date(now))}")
+            putExtra(Intent.EXTRA_TEXT, sb.toString().take(5000))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Invia log diagnostico"))
+        context.startActivity(Intent.createChooser(intent, "Invia log diagnostico completo"))
     } catch (e: Exception) {
         Log.e("MainActivity", "Errore generazione log diagnostico", e)
         Toast.makeText(context, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
