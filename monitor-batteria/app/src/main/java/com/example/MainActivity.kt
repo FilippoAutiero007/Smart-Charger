@@ -118,6 +118,20 @@ class MainActivity : ComponentActivity() {
         scheduleBackgroundBatteryCheck(applicationContext)
         // Pulizia log diagnostici >24h all'avvio per non pesare sull'app
         cleanupOldDiagnosticLogs(applicationContext)
+        // Heartbeat rinnovo automatico: se attivo, sincronizza abbonamento con server (Render ephemeral, serve keep-alive)
+        Thread {
+            try {
+                val sonoffPrefs = applicationContext.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
+                if (sonoffPrefs.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)) {
+                    val controller = SonoffController(applicationContext)
+                    // ritardo per evitare cold-start lento
+                    Thread.sleep(5000)
+                    controller.syncRenewalSubscription()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "heartbeat renewal all'avvio fallito", e)
+            }
+        }.start()
 
         setContent {
             MyApplicationTheme {
@@ -1694,7 +1708,20 @@ fun SonoffDeviceSection() {
                                                         .connectTimeout(60, TimeUnit.SECONDS)
                                                         .readTimeout(60, TimeUnit.SECONDS)
                                                         .build()
-                                                    val json = JSONObject().apply { put("email", email) }
+                                                    val sonoffPrefsTmp = context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
+                                                    val renewalEnabledTmp = sonoffPrefsTmp.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)
+                                                    val renewalIntervalTmp = sonoffPrefsTmp.getInt(SonoffController.KEY_RENEWAL_INTERVAL, 25)
+                                                    val renewalEmailTmp = sonoffPrefsTmp.getString(SonoffController.KEY_RENEWAL_EMAIL, "") ?: ""
+                                                    val json = JSONObject().apply {
+                                                        put("email", email)
+                                                        // se rinnovo attivo, sottoscrivi automaticamente al primo login (stessa mail)
+                                                        if (renewalEnabledTmp && renewalEmailTmp.isNotBlank() && renewalEmailTmp.equals(email, ignoreCase = true)) {
+                                                            put("autoRenew", true)
+                                                            put("intervalDays", renewalIntervalTmp)
+                                                            put("deviceId", sonoffPrefsTmp.getString(SonoffController.KEY_DEVICE_ID, "") ?: "")
+                                                            put("region", sonoffPrefsTmp.getString(SonoffController.KEY_REGION, "eu") ?: "eu")
+                                                        }
+                                                    }
                                                     val body = json.toString().toRequestBody("application/json".toMediaType())
                                                     val request = Request.Builder()
                                                         .url("$serverUrl/request-login")
@@ -1706,10 +1733,13 @@ fun SonoffDeviceSection() {
                                                     if (result.has("code")) {
                                                         val code = result.getString("code")
                                                         val url = result.optString("loginUrl", "")
+                                                        val mailSent = result.optBoolean("mailSent", false)
+                                                        val mailError = result.optString("mailError", "")
                                                         Handler(Looper.getMainLooper()).post {
                                                             authCode = code
                                                             loginUrlState = url
-                                                            emailStatus = "Codice: $code — Mail in arrivo (10-60s, controlla spam). Se non arriva, usa il link qui sotto."
+                                                            emailStatus = if (mailSent) "Codice: $code — Mail inviata! Controlla posta (e spam) entro 60s. Se non arriva, usa il link qui sotto."
+                                                            else "Codice: $code — Mail non inviata ($mailError). Usa il link diretto qui sotto (bug mail corretto in v2.4)."
                                                         }
                                                     } else {
                                                         Handler(Looper.getMainLooper()).post {
@@ -1792,6 +1822,18 @@ fun SonoffDeviceSection() {
                                                                 .putLong(SonoffController.KEY_RT_EXPIRY, rtExpiry)
                                                                 .putString(SonoffController.KEY_DEVICE_LIST, deviceBody)
                                                                 .apply()
+                                                            // heartbeat rinnovo se attivo
+                                                            try {
+                                                                if (sonoffPrefs.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)) {
+                                                                    Thread {
+                                                                        try {
+                                                                            val c = SonoffController(context)
+                                                                            // aggiorna atExpiry appena salvato
+                                                                            c.syncRenewalSubscription()
+                                                                        } catch (_: Exception) {}
+                                                                    }.start()
+                                                                }
+                                                            } catch (_: Exception) {}
                                                             if (devices.length() > 0) {
                                                                 val firstDevice = devices.getJSONObject(0)
                                                                 deviceId = firstDevice.optString("deviceid", "")
@@ -2426,6 +2468,11 @@ fun AutomationSection(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Gruppo 2b: Rinnovo automatico via mail (ogni 25/30 giorni) — funziona da qualsiasi dispositivo
+        RenewalAutoCard()
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         // Gruppo 3: Log
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -2446,6 +2493,260 @@ fun AutomationSection(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Invia log", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun RenewalAutoCard() {
+    val context = LocalContext.current
+    val sonoffPrefs = remember {
+        context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var renewalEmail by remember { mutableStateOf(sonoffPrefs.getString(SonoffController.KEY_RENEWAL_EMAIL, "") ?: "") }
+    var renewalEnabled by remember { mutableStateOf(sonoffPrefs.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)) }
+    var renewalInterval by remember { mutableStateOf(sonoffPrefs.getInt(SonoffController.KEY_RENEWAL_INTERVAL, 25)) }
+    var renewalStatus by remember { mutableStateOf(sonoffPrefs.getString(SonoffController.KEY_RENEWAL_LAST_STATUS, "") ?: "") }
+    var renewalActionMsg by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+
+    // Heartbeat status polling ogni 3s per mostrare aggiornamenti Worker
+    LaunchedEffect(Unit) {
+        while (true) {
+            renewalStatus = sonoffPrefs.getString(SonoffController.KEY_RENEWAL_LAST_STATUS, "") ?: ""
+            delay(3000)
+        }
+    }
+
+    LaunchedEffect(renewalEmail) { sonoffPrefs.edit().putString(SonoffController.KEY_RENEWAL_EMAIL, renewalEmail).apply() }
+    LaunchedEffect(renewalEnabled) { sonoffPrefs.edit().putBoolean(SonoffController.KEY_RENEWAL_ENABLED, renewalEnabled).apply() }
+    LaunchedEffect(renewalInterval) { sonoffPrefs.edit().putInt(SonoffController.KEY_RENEWAL_INTERVAL, renewalInterval).apply() }
+
+    // Calcola scadenza token per info utente
+    val atExpiry = sonoffPrefs.getLong(SonoffController.KEY_AT_EXPIRY, 0)
+    val now = System.currentTimeMillis()
+    val daysUntilExpiry = if (atExpiry > 0) ((atExpiry - now) / (24*60*60*1000.0)).toInt() else null
+    val expiryLabel = when {
+        daysUntilExpiry == null -> "Token n/d — fai login prima"
+        daysUntilExpiry < 0 -> "Scaduto da ${-daysUntilExpiry} giorni — rinnova ora!"
+        daysUntilExpiry <= 5 -> "Scade tra $daysUntilExpiry giorni — rinnovo imminente"
+        else -> "Scade tra $daysUntilExpiry giorni"
+    }
+    val nextRenewalDue = if (renewalEnabled && atExpiry > 0) {
+        val dueMs = atExpiry - 5*24*60*60*1000L
+        val days = ((dueMs - now)/(24*60*60*1000.0)).toInt()
+        if (days <= 0) "Prossimo rinnovo: imminente" else "Prossimo rinnovo tra $days giorni"
+    } else if (renewalEnabled) {
+        "Prossimo rinnovo tra $renewalInterval giorni"
+    } else null
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.CardDark),
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineDark.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Rinnovo automatico via mail",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                        color = com.example.ui.theme.TextPrimary
+                    )
+                    Text(
+                        text = "Ogni 25-30 giorni ricevi una mail per rinnovare da qualsiasi dispositivo.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                        color = com.example.ui.theme.TextTertiary
+                    )
+                }
+                Switch(
+                    checked = renewalEnabled,
+                    onCheckedChange = { renewalEnabled = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = com.example.ui.theme.ElegantPurple,
+                        checkedTrackColor = com.example.ui.theme.ElegantPurple.copy(alpha = 0.3f)
+                    )
+                )
+            }
+
+            HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.35f))
+
+            if (renewalEnabled) {
+                Text(
+                    text = expiryLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                    color = if (daysUntilExpiry != null && daysUntilExpiry <=5) com.example.ui.theme.RedAlert else com.example.ui.theme.TextSecondary
+                )
+                if (nextRenewalDue != null) {
+                    Text(text = nextRenewalDue, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = com.example.ui.theme.ElegantPurple)
+                }
+
+                OutlinedTextField(
+                    value = renewalEmail,
+                    onValueChange = { renewalEmail = it },
+                    label = { Text("Email per il rinnovo") },
+                    placeholder = { Text("es. tuo.nome@gmail.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = com.example.ui.theme.ElegantPurple,
+                        unfocusedBorderColor = com.example.ui.theme.OutlineDark,
+                        focusedLabelColor = com.example.ui.theme.ElegantPurple,
+                        cursorColor = com.example.ui.theme.ElegantPurple
+                    )
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(text = "Intervallo:", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp), color = com.example.ui.theme.TextSecondary)
+                    listOf(25 to "25 gg", 30 to "30 gg").forEach { (value, label) ->
+                        FilterChip(
+                            selected = renewalInterval == value,
+                            onClick = { renewalInterval = value },
+                            label = { Text(label, fontSize = 13.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = com.example.ui.theme.ElegantPurple.copy(alpha = 0.2f),
+                                selectedLabelColor = com.example.ui.theme.ElegantPurple
+                            )
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (renewalEmail.isBlank() || !renewalEmail.contains("@")) {
+                                renewalActionMsg = "Inserisci email valida."
+                                return@Button
+                            }
+                            isSaving = true
+                            renewalActionMsg = "Salvo e sincronizzo..."
+                            Thread {
+                                try {
+                                    val controller = SonoffController(context)
+                                    // aggiorna prefs prima di sync
+                                    sonoffPrefs.edit()
+                                        .putString(SonoffController.KEY_RENEWAL_EMAIL, renewalEmail.trim())
+                                        .putInt(SonoffController.KEY_RENEWAL_INTERVAL, renewalInterval)
+                                        .putBoolean(SonoffController.KEY_RENEWAL_ENABLED, true)
+                                        .apply()
+                                    val ok = controller.syncRenewalSubscription()
+                                    Handler(Looper.getMainLooper()).post {
+                                        isSaving = false
+                                        renewalActionMsg = if (ok) "Attivato! Riceverai mail ogni $renewalInterval giorni." else "Salvato ma sync server fallita — riprova con rete."
+                                        sonoffPrefs.edit().putString(SonoffController.KEY_RENEWAL_LAST_STATUS, renewalActionMsg).apply()
+                                    }
+                                } catch (e: Exception) {
+                                    Handler(Looper.getMainLooper()).post {
+                                        isSaving = false
+                                        renewalActionMsg = "Errore: ${e.message}"
+                                    }
+                                }
+                            }.start()
+                        },
+                        enabled = !isSaving,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ElegantPurple)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "Attiva", modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isSaving) "..." else "Attiva rinnovo", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            if (renewalEmail.isBlank()) {
+                                renewalActionMsg = "Nessuna email da testare."
+                                return@OutlinedButton
+                            }
+                            renewalActionMsg = "Invio mail di prova..."
+                            Thread {
+                                try {
+                                    val controller = SonoffController(context)
+                                    val ok = controller.triggerRenewalNow(renewalEmail.trim())
+                                    Handler(Looper.getMainLooper()).post {
+                                        renewalActionMsg = if (ok) "Mail di rinnovo inviata! Controlla posta." else "Invio fallito — verifica abbonamento attivo."
+                                    }
+                                } catch (e: Exception) {
+                                    Handler(Looper.getMainLooper()).post { renewalActionMsg = "Errore: ${e.message}" }
+                                }
+                            }.start()
+                        },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.theme.ElegantPurple)
+                    ) {
+                        Icon(Icons.Default.Email, contentDescription = "Test", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Test ora", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (renewalActionMsg.isNotBlank()) {
+                    Text(
+                        text = renewalActionMsg,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        color = if (renewalActionMsg.startsWith("Attivato") || renewalActionMsg.contains("inviata")) com.example.ui.theme.GreenHealthy else if (renewalActionMsg.startsWith("Errore") || renewalActionMsg.contains("fallita")) com.example.ui.theme.RedAlert else com.example.ui.theme.TextSecondary
+                    )
+                }
+                if (renewalStatus.isNotBlank()) {
+                    Text(text = "Stato: $renewalStatus", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = com.example.ui.theme.TextTertiary)
+                }
+
+                Text(
+                    text = "Suggerimento: dopo il rinnovo via mail, il nuovo codice puoi inserirlo su qualsiasi dispositivo dove hai installato l'app (non serve essere fisicamente sul dispositivo originale).",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = com.example.ui.theme.TextTertiary
+                )
+            } else {
+                Text(
+                    text = "Disattivato. Attiva per ricevere automaticamente la mail di rinnovo e non dover tornare fisicamente sul dispositivo.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = com.example.ui.theme.TextSecondary
+                )
+                if (renewalEmail.isNotBlank()) {
+                    TextButton(onClick = {
+                        // disiscrizione remota
+                        Thread {
+                            try {
+                                val c = SonoffController(context)
+                                c.unsubscribeRenewalRemote(renewalEmail.trim())
+                            } catch (_: Exception) {}
+                        }.start()
+                        sonoffPrefs.edit().putBoolean(SonoffController.KEY_RENEWAL_ENABLED, false).apply()
+                        renewalEnabled = false
+                        Toast.makeText(context, "Rinnovo disattivato", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text("Disiscrivi mail remota", color = com.example.ui.theme.RedAlert, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            HorizontalDivider(color = com.example.ui.theme.OutlineDark.copy(alpha = 0.2f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Info, contentDescription = "Info", tint = com.example.ui.theme.ElegantPurple, modifier = Modifier.size(16.dp))
+                Text(
+                    text = "Il server invia 5 giorni prima della scadenza (circa 25gg) e rispetta l'intervallo scelto. Se cambi mail, il vecchio abbonamento resta fino a disiscrizione.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = com.example.ui.theme.TextTertiary
+                )
             }
         }
     }

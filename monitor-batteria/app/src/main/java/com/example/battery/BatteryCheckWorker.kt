@@ -43,6 +43,28 @@ class BatteryCheckWorker(
         val state = BatteryMonitor.parseState(batteryIntent)
         Log.d(TAG, "Livello batteria: ${state.percentage}%, In Carica: ${state.isCharging}")
         BatteryAutomation.handleBatteryState(context, state, "Background")
+
+        // Heartbeat rinnovo automatico: mantiene vivo l'abbonamento anche dopo reboot server (Render ephemeral)
+        // Controllo leggero: solo se abilitato e ultima sync > 24h
+        try {
+            val sonoffPrefs = context.getSharedPreferences(SonoffController.PREFS_NAME, Context.MODE_PRIVATE)
+            val renewalEnabled = sonoffPrefs.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)
+            val renewalEmail = sonoffPrefs.getString(SonoffController.KEY_RENEWAL_EMAIL, "") ?: ""
+            if (renewalEnabled && renewalEmail.isNotEmpty()) {
+                val lastSent = sonoffPrefs.getLong(SonoffController.KEY_RENEWAL_LAST_SENT, 0)
+                val now = System.currentTimeMillis()
+                // heartbeat ogni 24h per tenere server allineato (token expiry può cambiare dopo refresh)
+                if (now - lastSent > 24 * 60 * 60 * 1000L) {
+                    Log.d(TAG, "heartbeat rinnovo per $renewalEmail")
+                    val controller = SonoffController(context)
+                    // Esegui in thread worker già background, ok sincrono
+                    controller.syncRenewalSubscription()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "heartbeat renewal errore", e)
+        }
+
         return Result.success()
     }
 }

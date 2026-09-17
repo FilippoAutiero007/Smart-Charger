@@ -26,6 +26,12 @@ class SonoffController(private val context: Context) {
         const val KEY_LAST_COMMAND = "sonoff_last_command"
         const val KEY_LAST_STATUS = "sonoff_last_status"
         const val KEY_DEVICE_LIST = "sonoff_device_list"
+        // Rinnovo automatico via mail
+        const val KEY_RENEWAL_EMAIL = "sonoff_renewal_email"
+        const val KEY_RENEWAL_ENABLED = "sonoff_renewal_enabled"
+        const val KEY_RENEWAL_INTERVAL = "sonoff_renewal_interval_days"
+        const val KEY_RENEWAL_LAST_SENT = "sonoff_renewal_last_sent"
+        const val KEY_RENEWAL_LAST_STATUS = "sonoff_renewal_last_status"
 
         private const val APP_ID = "lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo"
         const val AUTH_SERVER_URL = "https://auth-server-hnlj.onrender.com"
@@ -177,6 +183,100 @@ class SonoffController(private val context: Context) {
         val name: String,
         val uiid: String
     )
+
+    // --- Rinnovo automatico helpers ---
+    fun getRenewalEmail(): String = prefs.getString(KEY_RENEWAL_EMAIL, "") ?: ""
+    fun isRenewalEnabled(): Boolean = prefs.getBoolean(KEY_RENEWAL_ENABLED, false)
+    fun getRenewalInterval(): Int = prefs.getInt(KEY_RENEWAL_INTERVAL, 25)
+    fun getRenewalLastStatus(): String = prefs.getString(KEY_RENEWAL_LAST_STATUS, "") ?: ""
+
+    /**
+     * Sincronizza l'abbonamento di rinnovo sul server.
+     * Chiamata heartbeat: mantiene vivo l'abbonamento anche dopo reboot server (Render ephemerale).
+     * Da chiamare: dopo login, all'avvio app, e dal Worker giornaliero.
+     */
+    fun syncRenewalSubscription(): Boolean {
+        if (!isRenewalEnabled()) return false
+        val email = getRenewalEmail().trim()
+        if (email.isEmpty()) return false
+        val interval = getRenewalInterval()
+        val atExpiry = prefs.getLong(KEY_AT_EXPIRY, 0)
+        val rtExpiry = prefs.getLong(KEY_RT_EXPIRY, 0)
+        val deviceId = getDeviceId()
+        val region = prefs.getString(KEY_REGION, "eu") ?: "eu"
+        return try {
+            val body = JSONObject().apply {
+                put("email", email)
+                put("deviceId", deviceId)
+                put("region", region)
+                put("atExpiry", atExpiry)
+                put("rtExpiry", rtExpiry)
+                put("intervalDays", interval)
+                put("autoRenew", true)
+            }
+            val reqBody = body.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$AUTH_SERVER_URL/subscribe-renewal")
+                .post(reqBody)
+                .addHeader("Content-Type", "application/json")
+                .build()
+            val resp = client.newCall(request).execute()
+            val ok = resp.isSuccessful
+            val bodyStr = resp.body?.string() ?: ""
+            Log.d(TAG, "syncRenewalSubscription email=$email interval=$interval ok=$ok bodyLen=${bodyStr.length}")
+            if (ok) {
+                prefs.edit()
+                    .putLong(KEY_RENEWAL_LAST_SENT, System.currentTimeMillis())
+                    .putString(KEY_RENEWAL_LAST_STATUS, "Sincronizzato ${java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                    .apply()
+            } else {
+                prefs.edit().putString(KEY_RENEWAL_LAST_STATUS, "Errore sync: ${resp.code}").apply()
+                Log.e(TAG, "syncRenewalSubscription fallita code=${resp.code} body=$bodyStr")
+            }
+            ok
+        } catch (e: Exception) {
+            Log.e(TAG, "syncRenewalSubscription eccezione", e)
+            prefs.edit().putString(KEY_RENEWAL_LAST_STATUS, "Errore rete").apply()
+            false
+        }
+    }
+
+    fun unsubscribeRenewalRemote(email: String): Boolean {
+        return try {
+            val body = JSONObject().apply { put("email", email) }
+            val reqBody = body.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$AUTH_SERVER_URL/unsubscribe-renewal")
+                .post(reqBody)
+                .addHeader("Content-Type", "application/json")
+                .build()
+            val resp = client.newCall(request).execute()
+            Log.d(TAG, "unsubscribeRenewalRemote email=$email code=${resp.code}")
+            resp.isSuccessful
+        } catch (e: Exception) {
+            Log.e(TAG, "unsubscribeRenewalRemote eccezione", e)
+            false
+        }
+    }
+
+    fun triggerRenewalNow(email: String): Boolean {
+        return try {
+            val body = JSONObject().apply { put("email", email) }
+            val reqBody = body.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$AUTH_SERVER_URL/trigger-renewal")
+                .post(reqBody)
+                .addHeader("Content-Type", "application/json")
+                .build()
+            val resp = client.newCall(request).execute()
+            val bodyStr = resp.body?.string() ?: ""
+            Log.d(TAG, "triggerRenewalNow email=$email code=${resp.code} bodyLen=${bodyStr.length}")
+            resp.isSuccessful
+        } catch (e: Exception) {
+            Log.e(TAG, "triggerRenewalNow eccezione", e)
+            false
+        }
+    }
 
     fun listDevices(): List<SonoffDevice> {
         if (!refreshTokenIfNeeded()) return emptyList()
