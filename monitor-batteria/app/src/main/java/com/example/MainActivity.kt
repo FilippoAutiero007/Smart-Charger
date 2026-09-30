@@ -190,30 +190,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = MaterialTheme.colorScheme.background
-                ) { innerPadding ->
-                    BatteryMonitorContent(
-                        batteryState = batteryState.value,
-                        threshold = threshold,
-                        notificationsEnabled = notificationsEnabled,
-                        hasPermission = hasNotificationPermission,
-                        onThresholdChange = { threshold = it },
-                        onNotificationsEnabledChange = { notificationsEnabled = it },
-                        onRequestPermission = {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                Toast.makeText(context, "Permesso già autorizzato sul tuo sistema.", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onSendTestNotification = {
-                            sendInstantNotification(context, batteryState.value.percentage, threshold)
-                        },
-                        innerPadding = innerPadding
-                    )
-                }
+                val viewModel: com.example.ui.viewmodel.BatteryAppViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                val chargingState by viewModel.chargingUiState.collectAsState()
+                val dischargingState by viewModel.dischargingUiState.collectAsState()
+                val healthState by viewModel.healthUiState.collectAsState()
+                val automationState by viewModel.automationUiState.collectAsState()
+
+                com.example.ui.screens.MainScaffold(
+                    chargingUiState = chargingState,
+                    dischargingUiState = dischargingState,
+                    healthUiState = healthState,
+                    automationUiState = automationState,
+                    onThresholdChange = { viewModel.updateCutoffThreshold(it) },
+                    onSonoffToggle = { viewModel.toggleSonoffAutomation(it) },
+                    onSoundToggle = { viewModel.toggleNotificationSound(it) }
+                )
             }
         }
     }

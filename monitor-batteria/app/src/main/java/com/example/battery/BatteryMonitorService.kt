@@ -13,6 +13,15 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.R
+import com.example.battery.engine.StandbyTracker
+import com.example.data.BatteryRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class BatteryMonitorService : Service() {
     companion object {
@@ -20,23 +29,76 @@ class BatteryMonitorService : Service() {
         private const val FOREGROUND_CHANNEL_ID = "battery_monitor_foreground"
         private const val FOREGROUND_NOTIFICATION_ID = 2001
         const val ACTION_START = "com.example.battery.action.START"
+
+        private val _batteryStateFlow = MutableStateFlow(BatteryState())
+        val batteryStateFlow = _batteryStateFlow.asStateFlow()
     }
 
     private var receiverRegistered = false
+    private var screenReceiverRegistered = false
+    private var wasCharging = false
+    private var lastLevel = -1
+
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private lateinit var repository: BatteryRepository
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val currentLevel = if (lastLevel != -1) lastLevel else _batteryStateFlow.value.percentage
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    StandbyTracker.onScreenOff(applicationContext, currentLevel)
+                    Log.d(TAG, "ACTION_SCREEN_OFF logged, standby tracking engaged")
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    StandbyTracker.onScreenOn(applicationContext, currentLevel)
+                    Log.d(TAG, "ACTION_SCREEN_ON logged, deep sleep computed without wakelocks")
+                }
+            }
+        }
+    }
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val state = BatteryMonitor.parseState(intent)
-            Thread {
+            val state = BatteryMonitor.parseState(intent, applicationContext)
+            _batteryStateFlow.value = state
+            lastLevel = state.percentage
+
+            serviceScope.launch {
+                handleSessionTracking(state)
                 BatteryAutomation.handleBatteryState(applicationContext, state, "Service")
-            }.start()
+            }
+        }
+    }
+
+    private suspend fun handleSessionTracking(state: BatteryState) {
+        if (state.isCharging) {
+            if (!wasCharging) {
+                wasCharging = true
+                repository.onChargingStarted(state.percentage, state.voltage)
+            } else {
+                repository.updateChargingProgress(
+                    currentLevel = state.percentage,
+                    currentMa = state.currentMa,
+                    voltageMv = state.voltage,
+                    tempCelsius = state.temperature
+                )
+            }
+        } else {
+            if (wasCharging) {
+                wasCharging = false
+                repository.onChargingFinished(state.percentage, stoppedBySonoff = false)
+            }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        repository = BatteryRepository(applicationContext)
         startForegroundNotification()
         registerBatteryReceiver()
+        registerScreenReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -49,6 +111,11 @@ class BatteryMonitorService : Service() {
             unregisterReceiver(batteryReceiver)
             receiverRegistered = false
         }
+        if (screenReceiverRegistered) {
+            unregisterReceiver(screenReceiver)
+            screenReceiverRegistered = false
+        }
+        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -61,11 +128,27 @@ class BatteryMonitorService : Service() {
         receiverRegistered = true
 
         if (stickyIntent != null) {
-            val state = BatteryMonitor.parseState(stickyIntent)
-            Thread {
+            val state = BatteryMonitor.parseState(stickyIntent, applicationContext)
+            _batteryStateFlow.value = state
+            wasCharging = state.isCharging
+            lastLevel = state.percentage
+            serviceScope.launch {
+                if (state.isCharging) {
+                    repository.onChargingStarted(state.percentage, state.voltage)
+                }
                 BatteryAutomation.handleBatteryState(applicationContext, state, "Service")
-            }.start()
+            }
         }
+    }
+
+    private fun registerScreenReceiver() {
+        if (screenReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
+        screenReceiverRegistered = true
     }
 
     private fun startForegroundNotification() {
@@ -87,7 +170,7 @@ class BatteryMonitorService : Service() {
         return NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText("Monitor batteria attivo in background")
+            .setContentText("Monitor telemetria e ricarica attiva")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setSilent(true)

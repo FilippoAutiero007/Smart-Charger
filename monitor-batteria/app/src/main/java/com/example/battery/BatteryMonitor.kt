@@ -6,7 +6,7 @@ import android.os.BatteryManager
 
 object BatteryMonitor {
 
-    fun parseState(intent: Intent): BatteryState {
+    fun parseState(intent: Intent, context: Context? = null): BatteryState {
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
         
@@ -54,6 +54,14 @@ object BatteryMonitor {
 
         val voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)
 
+        val currentMa = if (context != null) {
+            com.example.battery.engine.BatteryTelemetryEngine.readNormalizedCurrentMa(context, isCharging)
+        } else {
+            if (isCharging) 1800 else -350
+        }
+
+        val powerWatts = com.example.battery.engine.BatteryTelemetryEngine.calculatePowerWatts(voltage, currentMa)
+
         return BatteryState(
             percentage = percentage,
             isCharging = isCharging,
@@ -61,7 +69,9 @@ object BatteryMonitor {
             health = health,
             temperature = temperature,
             voltage = voltage,
-            status = status
+            status = status,
+            currentMa = currentMa,
+            powerWatts = powerWatts
         )
     }
 }

@@ -10,6 +10,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import kotlinx.coroutines.launch
 
 object BatteryAutomation {
     private const val TAG = "BatteryAutomation"
@@ -64,6 +65,14 @@ object BatteryAutomation {
             batteryPercentage >= offThreshold && lastCommand != "off" -> {
                 Log.d(TAG, "handleSonoffControl: OFF at $batteryPercentage%")
                 controller.turnOff(deviceId)
+                try {
+                    val repo = com.example.data.BatteryRepository(context)
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        repo.onChargingFinished(batteryPercentage, stoppedBySonoff = true)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error updating charging session on Sonoff cutoff", e)
+                }
             }
             batteryPercentage <= onThreshold && lastCommand != "on" -> {
                 Log.d(TAG, "handleSonoffControl: ON at $batteryPercentage%")
