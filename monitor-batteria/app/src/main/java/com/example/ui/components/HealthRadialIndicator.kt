@@ -41,11 +41,11 @@ fun HealthRadialIndicator(
 
     Box(
         modifier = modifier
-            .size(220.dp),
+            .size(250.dp),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            val strokeWidth = 16.dp.toPx()
+        Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+            val strokeWidth = 14.dp.toPx()
             val canvasSize = size.minDimension - strokeWidth * 2
             val topLeft = Offset(
                 (size.width - canvasSize) / 2,
@@ -81,14 +81,15 @@ fun HealthRadialIndicator(
             )
         }
 
-        // Inner text readout
+        // Inner text readout with ample clearance
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 28.dp)
         ) {
             Text(
                 text = "$healthPercent%",
                 color = TextPrimary,
-                fontSize = 42.sp,
+                fontSize = 44.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-1).sp
             )
@@ -97,9 +98,9 @@ fun HealthRadialIndicator(
                 color = TextSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp
+                letterSpacing = 0.5.sp
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "$estimatedMah / $designMah mAh",
                 color = ElegantPurple,

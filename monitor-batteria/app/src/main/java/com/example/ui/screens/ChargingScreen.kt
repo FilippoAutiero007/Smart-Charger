@@ -15,13 +15,17 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.battery.LocalLogService
+import com.example.ui.components.BatteryTrendChartCard
 import com.example.ui.components.GaugeSpeedometer
 import com.example.ui.components.MetricCard
 import com.example.ui.model.ChargingUiState
@@ -32,6 +36,8 @@ fun ChargingScreen(
     state: ChargingUiState,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val logs = remember { LocalLogService.getLogs(context) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -175,5 +181,11 @@ fun ChargingScreen(
                 )
             }
         }
+
+        // Grafico d'Andamento Storico con opzione Fullscreen / Orizzontale
+        BatteryTrendChartCard(
+            logs = logs,
+            title = "Curva d'Assorbimento e Carica"
+        )
     }
 }

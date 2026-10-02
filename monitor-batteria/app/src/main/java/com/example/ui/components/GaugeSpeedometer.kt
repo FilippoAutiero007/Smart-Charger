@@ -43,15 +43,19 @@ fun GaugeSpeedometer(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp),
+            .height(180.dp),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            val strokeWidth = 14.dp.toPx()
+        Canvas(modifier = Modifier.size(180.dp).padding(10.dp)) {
+            val strokeWidth = 12.dp.toPx()
             val startAngle = 140f
             val sweepAngle = 260f
-            val arcSize = Size(size.width - strokeWidth * 2, size.height * 1.5f - strokeWidth * 2)
-            val topLeft = Offset(strokeWidth, strokeWidth)
+            val diameter = size.minDimension - strokeWidth * 2
+            val arcSize = Size(diameter, diameter)
+            val topLeft = Offset(
+                (size.width - diameter) / 2f,
+                (size.height - diameter) / 2f
+            )
 
             // Background track
             drawArc(
@@ -89,17 +93,17 @@ fun GaugeSpeedometer(
         // Inner readout
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 28.dp)
+            modifier = Modifier.padding(top = 10.dp)
         ) {
             Text(
                 text = if (isCharging) "+$currentMa" else "$currentMa",
                 color = TextPrimary,
-                fontSize = 38.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.5).sp
             )
             Text(
-                text = "mA CORRENTE ISTANTANEA",
+                text = "mA CORRENTE",
                 color = ElegantPurple,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,

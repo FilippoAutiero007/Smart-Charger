@@ -22,7 +22,7 @@ fun MainScaffold(
     onSonoffToggle: (Boolean) -> Unit = {},
     onSoundToggle: (Boolean) -> Unit = {}
 ) {
-    var selectedScreen by remember { mutableStateOf<Screen>(Screen.Charging) }
+    var selectedScreen by remember { mutableStateOf<Screen>(Screen.Health) }
 
     Scaffold(
         containerColor = BackgroundDark,
