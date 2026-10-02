@@ -20,7 +20,8 @@ fun MainScaffold(
     automationUiState: AutomationUiState = AutomationUiState(),
     onThresholdChange: (Int) -> Unit = {},
     onSonoffToggle: (Boolean) -> Unit = {},
-    onSoundToggle: (Boolean) -> Unit = {}
+    onSoundToggle: (Boolean) -> Unit = {},
+    onSendTestNotification: () -> Unit = {}
 ) {
     var selectedScreen by remember { mutableStateOf<Screen>(Screen.Health) }
 
@@ -73,7 +74,8 @@ fun MainScaffold(
                     state = automationUiState,
                     onThresholdChange = onThresholdChange,
                     onSonoffToggle = onSonoffToggle,
-                    onSoundToggle = onSoundToggle
+                    onSoundToggle = onSoundToggle,
+                    onSendTestNotification = onSendTestNotification
                 )
             }
         }

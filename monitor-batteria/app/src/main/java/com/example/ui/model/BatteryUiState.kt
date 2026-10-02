@@ -39,8 +39,11 @@ data class HealthUiState(
     val estimatedCapacityMah: Int = 4450,
     val designCapacityMah: Int = 5000,
     val healthPercentage: Int = 89,
-    val totalCyclesTracked: Float = 142.6f,
-    val recentSessions: List<ChargingSessionSummary> = emptyList()
+    val totalCyclesTracked: Float = 0f,
+    val recentSessions: List<ChargingSessionSummary> = emptyList(),
+    val batteryLevel: Int = 0,
+    val isCharging: Boolean = false,
+    val plugType: String = ""
 )
 
 data class ChargingSessionSummary(

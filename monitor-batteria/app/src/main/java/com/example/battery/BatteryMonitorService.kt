@@ -32,6 +32,21 @@ class BatteryMonitorService : Service() {
 
         private val _batteryStateFlow = MutableStateFlow(BatteryState())
         val batteryStateFlow = _batteryStateFlow.asStateFlow()
+
+        fun updateFromSystem(context: Context): BatteryState {
+            val stickyIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val state = if (stickyIntent != null) {
+                BatteryMonitor.parseState(stickyIntent, context)
+            } else {
+                val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                val level = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 0
+                BatteryState(percentage = level)
+            }
+            if (state.percentage > 0) {
+                _batteryStateFlow.value = state
+            }
+            return state
+        }
     }
 
     private var receiverRegistered = false

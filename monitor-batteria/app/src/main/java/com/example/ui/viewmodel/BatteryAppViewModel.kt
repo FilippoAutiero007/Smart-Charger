@@ -77,8 +77,9 @@ class BatteryAppViewModel(application: Application) : AndroidViewModel(applicati
 
     val healthUiState: StateFlow<HealthUiState> = combine(
         repository.getRecentSessionSummaries(10),
-        repository.getTotalCycles()
-    ) { sessions, totalCycles ->
+        repository.getTotalCycles(),
+        BatteryMonitorService.batteryStateFlow
+    ) { sessions, totalCycles, bState ->
         val designCap = BatteryTelemetryEngine.getDesignCapacityMah(context)
         val estimatedCap = repository.getEstimatedCapacity()
         val healthPct = ((estimatedCap.toFloat() / designCap.toFloat()) * 100f).roundToInt().coerceIn(1, 100)
@@ -88,15 +89,23 @@ class BatteryAppViewModel(application: Application) : AndroidViewModel(applicati
             designCapacityMah = designCap,
             healthPercentage = healthPct,
             totalCyclesTracked = totalCycles,
-            recentSessions = sessions
+            recentSessions = sessions,
+            batteryLevel = bState.percentage,
+            isCharging = bState.isCharging,
+            plugType = bState.plugType
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = HealthUiState()
+        initialValue = HealthUiState(
+            batteryLevel = BatteryMonitorService.batteryStateFlow.value.percentage,
+            isCharging = BatteryMonitorService.batteryStateFlow.value.isCharging,
+            plugType = BatteryMonitorService.batteryStateFlow.value.plugType
+        )
     )
 
     init {
+        BatteryMonitorService.updateFromSystem(context)
         refreshStandbyStats()
     }
 

@@ -11,6 +11,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -114,9 +116,25 @@ class MainActivity : ComponentActivity() {
         this.enableEdgeToEdge()
 
         try {
+            com.example.battery.BatteryMonitorService.updateFromSystem(applicationContext)
             ensureBatteryMonitorService()
         } catch (e: Exception) {
             Log.e("MainActivity", "Impossibile avviare BatteryMonitorService all'avvio", e)
+        }
+
+        // Richiesta esenzione ottimizzazioni batteria per garantire il monitoraggio continuo
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val optIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(optIntent)
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "Impossibile avviare intent esenzione batteria: ${e.message}")
+                }
+            }
         }
         // Schedula il monitoraggio periodico in background all'avvio dell'app
         scheduleBackgroundBatteryCheck(applicationContext)
@@ -207,7 +225,10 @@ class MainActivity : ComponentActivity() {
                     automationUiState = automationState,
                     onThresholdChange = { viewModel.updateCutoffThreshold(it) },
                     onSonoffToggle = { viewModel.toggleSonoffAutomation(it) },
-                    onSoundToggle = { viewModel.toggleNotificationSound(it) }
+                    onSoundToggle = { viewModel.toggleNotificationSound(it) },
+                    onSendTestNotification = {
+                        sendInstantNotification(context, batteryState.value.percentage, threshold)
+                    }
                 )
             }
         }

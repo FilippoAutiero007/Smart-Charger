@@ -88,6 +88,57 @@ fun ChargingScreen(
             }
         }
 
+        // Battery Percentage Hero Banner
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(CardDark)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "LIVE CARICA DISPOSITIVO",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${state.batteryLevel}%",
+                        color = if (state.isCharging) ElegantPurple else TextPrimary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = if (state.isCharging) "In carica via presa/alimentatore" else "In uso a batteria",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (state.isCharging) TranslucentElegantPurple else OutlineDark.copy(alpha = 0.3f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = if (state.isCharging) "IN ALIMENTAZIONE" else "BATTERIA",
+                        color = if (state.isCharging) ElegantPurple else TextSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
         // Hero Gauge (Current in mA)
         GaugeSpeedometer(
             currentMa = state.currentMa,

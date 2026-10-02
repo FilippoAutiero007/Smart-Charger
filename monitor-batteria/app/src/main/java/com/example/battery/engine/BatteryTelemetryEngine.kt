@@ -76,7 +76,7 @@ object BatteryTelemetryEngine {
     }
 
     /**
-     * Scientific Li-ion battery wear calculation (AccuBattery empirical degradation curve).
+     * Scientific Li-ion battery wear calculation (empirical degradation curve).
      * Quantifies cycle wear for a charge session from startLevel to endLevel.
      * High voltage stress above 80% (4.15V-4.25V) exponentially accelerates wear.
      * Analytical closed-form solution:

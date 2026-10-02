@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.AutomationSection
+import com.example.SonoffDeviceSection
 import com.example.ui.model.AutomationUiState
 import com.example.ui.theme.*
 
@@ -28,11 +30,10 @@ fun AutomationScreen(
     onThresholdChange: (Int) -> Unit = {},
     onSonoffToggle: (Boolean) -> Unit = {},
     onSoundToggle: (Boolean) -> Unit = {},
+    onSendTestNotification: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var currentThreshold by remember(state.cutoffThreshold) { mutableStateOf(state.cutoffThreshold.toFloat()) }
-    var sonoffActive by remember(state.sonoffEnabled) { mutableStateOf(state.sonoffEnabled) }
-    var soundActive by remember(state.notificationSoundEnabled) { mutableStateOf(state.notificationSoundEnabled) }
+    var notificationsEnabled by remember { mutableStateOf(state.notificationSoundEnabled) }
 
     Column(
         modifier = modifier
@@ -42,151 +43,47 @@ fun AutomationScreen(
             .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // Cut-off Threshold Slider Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(CardDark)
-                .padding(20.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "SOGLIA DI CUT-OFF BATTERIA",
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp
-                    )
-                    Text(
-                        text = "${currentThreshold.toInt()}%",
-                        color = ElegantPurple,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+        // eWeLink & Sonoff Hardware Configuration (Reale e Completo)
+        Text(
+            text = "Accoppiamento eWeLink & Sonoff",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+            color = TextPrimary,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = "Collega il tuo account eWeLink cloud o LAN, seleziona il dispositivo e testa i comandi della presa.",
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+            color = TextSecondary,
+            modifier = Modifier.fillMaxWidth()
+        )
 
-                Slider(
-                    value = currentThreshold,
-                    onValueChange = {
-                        currentThreshold = it
-                        onThresholdChange(it.toInt())
-                    },
-                    valueRange = 50f..100f,
-                    steps = 9,
-                    colors = SliderDefaults.colors(
-                        thumbColor = ElegantPurple,
-                        activeTrackColor = ElegantPurple,
-                        inactiveTrackColor = OutlineDark
-                    )
-                )
+        SonoffDeviceSection()
 
-                Text(
-                    text = "Consigliato: 80% per preservare la chimica al litio e ridurre lo stress da tensione.",
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
-            }
-        }
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Sonoff Integration Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(CardDark)
-                .padding(20.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Presa Smart Sonoff",
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = state.sonoffDeviceStatus,
-                            color = if (state.sonoffApiKeyConfigured) GreenHealthy else Amber500,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Switch(
-                        checked = sonoffActive,
-                        onCheckedChange = {
-                            sonoffActive = it
-                            onSonoffToggle(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = ElegantPurple,
-                            checkedTrackColor = ElegantPurple.copy(alpha = 0.3f),
-                            uncheckedThumbColor = TextSecondary,
-                            uncheckedTrackColor = OutlineDark
-                        )
-                    )
-                }
+        // Soglie di Carica & Notifiche Automatiche (Reale e Completo)
+        Text(
+            text = "Regole di Automazione & Allarmi",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+            color = TextPrimary,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = "Configura le soglie percentuali per staccare o riattaccare l'alimentazione automaticamente.",
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+            color = TextSecondary,
+            modifier = Modifier.fillMaxWidth()
+        )
 
-                Text(
-                    text = "Spegne la presa Wi-Fi automaticamente al raggiungimento della soglia impostata.",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
-            }
-        }
-
-        // Sound & Notifications Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(CardDark)
-                .padding(20.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Avviso Sonoro",
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (soundActive) "Allarme audio attivo" else "Silenzioso",
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Switch(
-                        checked = soundActive,
-                        onCheckedChange = {
-                            soundActive = it
-                            onSoundToggle(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = ElegantPurple,
-                            checkedTrackColor = ElegantPurple.copy(alpha = 0.3f),
-                            uncheckedThumbColor = TextSecondary,
-                            uncheckedTrackColor = OutlineDark
-                        )
-                    )
-                }
-            }
-        }
+        AutomationSection(
+            notificationsEnabled = notificationsEnabled,
+            onNotificationsEnabledChange = {
+                notificationsEnabled = it
+                onSoundToggle(it)
+            },
+            onSendTestNotification = onSendTestNotification
+        )
     }
 }
