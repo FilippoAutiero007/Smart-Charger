@@ -58,7 +58,7 @@ fun ChargingScreen(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(if (state.sonoffConnected) Emerald500 else Rose500)
+                        .background(if (state.sonoffConnected) GreenHealthy else RedAlert)
                 )
                 Text(
                     text = if (state.sonoffConnected) "Sonoff: ${state.sonoffDeviceName}" else "Sonoff Offline",
@@ -70,12 +70,12 @@ fun ChargingScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(if (state.sonoffRelayOn) Emerald500.copy(alpha = 0.2f) else Slate700)
+                    .background(if (state.sonoffRelayOn) TranslucentElegantPurple else OutlineDark.copy(alpha = 0.3f))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = if (state.sonoffRelayOn) "PRESA ATTIVA" else "PRESA STACCATA",
-                    color = if (state.sonoffRelayOn) Emerald500 else TextSecondary,
+                    color = if (state.sonoffRelayOn) ElegantPurple else TextSecondary,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -116,12 +116,12 @@ fun ChargingScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Emerald500.copy(alpha = 0.15f))
+                    .background(TranslucentElegantPurple)
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = state.chargingSpeedType,
-                    color = Emerald500,
+                    color = ElegantPurple,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -161,7 +161,7 @@ fun ChargingScreen(
                     value = String.format("%.1f", state.temperatureCelsius),
                     unit = "°C",
                     icon = Icons.Filled.Thermostat,
-                    iconTint = if (state.temperatureCelsius > 40f) Rose500 else Emerald500,
+                    iconTint = if (state.temperatureCelsius > 40f) RedAlert else GreenHealthy,
                     subtitle = if (state.temperatureCelsius > 40f) "Attenzione: surriscaldamento" else "Temperatura ottimale",
                     modifier = Modifier.weight(1f)
                 )
@@ -170,7 +170,7 @@ fun ChargingScreen(
                     value = "${state.batteryLevel}",
                     unit = "%",
                     icon = Icons.Filled.Power,
-                    iconTint = Emerald500,
+                    iconTint = ElegantPurple,
                     modifier = Modifier.weight(1f)
                 )
             }

@@ -65,7 +65,7 @@ fun AutomationScreen(
                     )
                     Text(
                         text = "${currentThreshold.toInt()}%",
-                        color = Emerald500,
+                        color = ElegantPurple,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -80,9 +80,9 @@ fun AutomationScreen(
                     valueRange = 50f..100f,
                     steps = 9,
                     colors = SliderDefaults.colors(
-                        thumbColor = Emerald500,
-                        activeTrackColor = Emerald500,
-                        inactiveTrackColor = Slate700
+                        thumbColor = ElegantPurple,
+                        activeTrackColor = ElegantPurple,
+                        inactiveTrackColor = OutlineDark
                     )
                 )
 
@@ -118,7 +118,7 @@ fun AutomationScreen(
                         )
                         Text(
                             text = state.sonoffDeviceStatus,
-                            color = if (state.sonoffApiKeyConfigured) Emerald500 else Amber500,
+                            color = if (state.sonoffApiKeyConfigured) GreenHealthy else Amber500,
                             fontSize = 12.sp
                         )
                     }
@@ -129,10 +129,10 @@ fun AutomationScreen(
                             onSonoffToggle(it)
                         },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Emerald500,
-                            checkedTrackColor = Emerald500.copy(alpha = 0.3f),
+                            checkedThumbColor = ElegantPurple,
+                            checkedTrackColor = ElegantPurple.copy(alpha = 0.3f),
                             uncheckedThumbColor = TextSecondary,
-                            uncheckedTrackColor = Slate700
+                            uncheckedTrackColor = OutlineDark
                         )
                     )
                 }
@@ -153,37 +153,39 @@ fun AutomationScreen(
                 .background(CardDark)
                 .padding(20.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Notifiche & Suono di Allarme",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Suona quando la carica raggiunge l'obiettivo",
-                        color = TextSecondary,
-                        fontSize = 12.sp
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Avviso Sonoro",
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (soundActive) "Allarme audio attivo" else "Silenzioso",
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Switch(
+                        checked = soundActive,
+                        onCheckedChange = {
+                            soundActive = it
+                            onSoundToggle(it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = ElegantPurple,
+                            checkedTrackColor = ElegantPurple.copy(alpha = 0.3f),
+                            uncheckedThumbColor = TextSecondary,
+                            uncheckedTrackColor = OutlineDark
+                        )
                     )
                 }
-                Switch(
-                    checked = soundActive,
-                    onCheckedChange = {
-                        soundActive = it
-                        onSoundToggle(it)
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Emerald500,
-                        checkedTrackColor = Emerald500.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextSecondary,
-                        uncheckedTrackColor = Slate700
-                    )
-                )
             }
         }
     }

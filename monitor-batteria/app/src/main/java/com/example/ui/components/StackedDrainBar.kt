@@ -12,8 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.Emerald500
-import com.example.ui.theme.Slate700
+import com.example.ui.theme.GreenHealthy
+import com.example.ui.theme.OutlineDark
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
@@ -36,7 +36,7 @@ fun StackedDrainBar(
                 .fillMaxWidth()
                 .height(14.dp)
                 .clip(RoundedCornerShape(7.dp))
-                .background(Slate700.copy(alpha = 0.3f))
+                .background(OutlineDark.copy(alpha = 0.3f))
         ) {
             // Screen On (Amber/Orange)
             Box(
@@ -52,12 +52,12 @@ fun StackedDrainBar(
                     .fillMaxHeight()
                     .background(Color(0xFF6366F1))
             )
-            // Deep Sleep (Emerald)
+            // Deep Sleep (GreenHealthy)
             Box(
                 modifier = Modifier
                     .weight(deepSleepWeight)
                     .fillMaxHeight()
-                    .background(Emerald500)
+                    .background(GreenHealthy)
             )
         }
 
@@ -68,7 +68,7 @@ fun StackedDrainBar(
         ) {
             LegendItem(color = Color(0xFFF59E0B), label = "Schermo Acceso", value = "${screenOnDrain.toInt()}%")
             LegendItem(color = Color(0xFF6366F1), label = "Schermo Spento", value = "${screenOffDrain.toInt()}%")
-            LegendItem(color = Emerald500, label = "Deep Sleep", value = "${deepSleepDrain.toInt()}%")
+            LegendItem(color = GreenHealthy, label = "Deep Sleep", value = "${deepSleepDrain.toInt()}%")
         }
     }
 }

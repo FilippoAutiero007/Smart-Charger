@@ -56,7 +56,7 @@ fun HealthScreen(
                 value = "${state.estimatedCapacityMah}",
                 unit = "mAh",
                 icon = Icons.Filled.BatterySaver,
-                iconTint = Emerald500,
+                iconTint = ElegantPurple,
                 subtitle = "Nominale: ${state.designCapacityMah} mAh",
                 modifier = Modifier.weight(1f)
             )
@@ -82,7 +82,7 @@ fun HealthScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "VANTAGGIO SMART CUTOFF 80%",
-                    color = Emerald500,
+                    color = ElegantPurple,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
@@ -146,14 +146,14 @@ fun HealthScreen(
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "${String.format("%.2f", session.cycleWear)} cicli",
-                            color = if (session.cycleWear < 0.3f) Emerald500 else Amber500,
+                            color = if (session.cycleWear < 0.3f) GreenHealthy else Amber500,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                         if (session.stoppedBySonoff) {
                             Text(
                                 text = "Cut-off Sonoff",
-                                color = Emerald500,
+                                color = ElegantPurple,
                                 fontSize = 11.sp
                             )
                         }

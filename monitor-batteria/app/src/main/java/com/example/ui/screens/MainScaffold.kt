@@ -52,11 +52,11 @@ fun MainScaffold(
                             selected = isSelected,
                             onClick = { selectedScreen = screen },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Emerald500,
-                                selectedTextColor = Emerald500,
+                                selectedIconColor = ElegantPurple,
+                                selectedTextColor = ElegantPurple,
                                 unselectedIconColor = TextSecondary,
                                 unselectedTextColor = TextSecondary,
-                                indicatorColor = Emerald500.copy(alpha = 0.15f)
+                                indicatorColor = TranslucentElegantPurple
                             )
                         )
                     }

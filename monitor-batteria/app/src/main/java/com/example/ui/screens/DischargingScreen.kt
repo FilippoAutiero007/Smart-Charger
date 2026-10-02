@@ -83,7 +83,7 @@ fun DischargingScreen(
                         )
                         Text(
                             text = state.estimatedTimeRemaining,
-                            color = Emerald500,
+                            color = ElegantPurple,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -115,7 +115,7 @@ fun DischargingScreen(
                     )
                     Text(
                         text = "${(state.deepSleepRatio * 100).toInt()}% Deep Sleep",
-                        color = Emerald500,
+                        color = GreenHealthy,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -149,7 +149,7 @@ fun DischargingScreen(
                 value = formatHoursMinutes(state.deepSleepTimeSec),
                 unit = "",
                 icon = Icons.Filled.Bedtime,
-                iconTint = Emerald500,
+                iconTint = GreenHealthy,
                 subtitle = "Consumo: ${state.deepSleepDrainPercent.toInt()}%",
                 modifier = Modifier.weight(1f)
             )
@@ -164,7 +164,7 @@ fun DischargingScreen(
                 value = "-${state.currentDrainMa}",
                 unit = "mA",
                 icon = Icons.Filled.TrendingDown,
-                iconTint = Rose500,
+                iconTint = RedAlert,
                 modifier = Modifier.weight(1f)
             )
             MetricCard(

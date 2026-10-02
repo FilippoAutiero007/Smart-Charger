@@ -18,8 +18,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.Emerald500
-import com.example.ui.theme.Slate700
+import com.example.ui.theme.ElegantPurple
+import com.example.ui.theme.GreenHealthy
+import com.example.ui.theme.OutlineDark
+import com.example.ui.theme.RedAlert
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
@@ -52,7 +54,7 @@ fun HealthRadialIndicator(
 
             // Background circle
             drawArc(
-                color = Slate700.copy(alpha = 0.35f),
+                color = OutlineDark.copy(alpha = 0.35f),
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -61,11 +63,11 @@ fun HealthRadialIndicator(
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
 
-            // Health color logic: green >80%, yellow 70-80%, rose <70%
+            // Health color logic: healthy >=80%, warning 70-80%, alert <70%
             val activeColor = when {
-                healthPercent >= 80 -> Emerald500
+                healthPercent >= 80 -> GreenHealthy
                 healthPercent >= 70 -> Color(0xFFF59E0B)
-                else -> Color(0xFFF43F5E)
+                else -> RedAlert
             }
 
             drawArc(
@@ -100,7 +102,7 @@ fun HealthRadialIndicator(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "$estimatedMah / $designMah mAh",
-                color = Emerald500,
+                color = ElegantPurple,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )

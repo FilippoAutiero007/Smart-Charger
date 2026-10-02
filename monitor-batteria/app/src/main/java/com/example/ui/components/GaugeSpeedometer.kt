@@ -18,9 +18,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.Emerald500
-import com.example.ui.theme.Emerald600
-import com.example.ui.theme.Slate700
+import com.example.ui.theme.ElegantPurple
+import com.example.ui.theme.OutlineDark
+import com.example.ui.theme.TranslucentElegantPurple
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import kotlin.math.cos
@@ -55,7 +55,7 @@ fun GaugeSpeedometer(
 
             // Background track
             drawArc(
-                color = Slate700.copy(alpha = 0.4f),
+                color = OutlineDark.copy(alpha = 0.4f),
                 startAngle = startAngle,
                 sweepAngle = sweepAngle,
                 useCenter = false,
@@ -67,9 +67,9 @@ fun GaugeSpeedometer(
             // Active gradient arc
             val gradientBrush = Brush.sweepGradient(
                 colors = listOf(
-                    Emerald600,
-                    Emerald500,
-                    Color(0xFF34D399)
+                    Color(0xFF9A82DB),
+                    ElegantPurple,
+                    Color(0xFFEADDFF)
                 )
             )
 
@@ -100,7 +100,7 @@ fun GaugeSpeedometer(
             )
             Text(
                 text = "mA CORRENTE ISTANTANEA",
-                color = Emerald500,
+                color = ElegantPurple,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.sp
