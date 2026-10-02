@@ -31,31 +31,35 @@ fun MainScaffold(
                 containerColor = CardDark,
                 tonalElevation = 8.dp
             ) {
-                Screen.items.forEach { screen ->
-                    val isSelected = selectedScreen == screen
-                    NavigationBarItem(
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                contentDescription = screen.title
+                for (screen in Screen.items) {
+                    key(screen.route) {
+                        val isSelected = selectedScreen == screen
+                        val icon = if (isSelected) screen.selectedIcon else screen.unselectedIcon
+                        val label = screen.title
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp
+                                )
+                            },
+                            selected = isSelected,
+                            onClick = { selectedScreen = screen },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Emerald500,
+                                selectedTextColor = Emerald500,
+                                unselectedIconColor = TextSecondary,
+                                unselectedTextColor = TextSecondary,
+                                indicatorColor = Emerald500.copy(alpha = 0.15f)
                             )
-                        },
-                        label = {
-                            Text(
-                                text = screen.title,
-                                fontSize = 11.sp
-                            )
-                        },
-                        selected = isSelected,
-                        onClick = { selectedScreen = screen },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Emerald500,
-                            selectedTextColor = Emerald500,
-                            unselectedIconColor = TextSecondary,
-                            unselectedTextColor = TextSecondary,
-                            indicatorColor = Emerald500.copy(alpha = 0.15f)
                         )
-                    )
+                    }
                 }
             }
         }

@@ -113,7 +113,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         this.enableEdgeToEdge()
 
-        ensureBatteryMonitorService()
+        try {
+            ensureBatteryMonitorService()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Impossibile avviare BatteryMonitorService all'avvio", e)
+        }
         // Schedula il monitoraggio periodico in background all'avvio dell'app
         scheduleBackgroundBatteryCheck(applicationContext)
         // Pulizia log diagnostici >24h all'avvio per non pesare sull'app

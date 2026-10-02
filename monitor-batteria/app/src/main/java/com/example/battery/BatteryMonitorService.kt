@@ -147,8 +147,23 @@ class BatteryMonitorService : Service() {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
         }
-        registerReceiver(screenReceiver, filter)
-        screenReceiverRegistered = true
+        try {
+            androidx.core.content.ContextCompat.registerReceiver(
+                this,
+                screenReceiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            screenReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.w(TAG, "Impossibile registrare screenReceiver con flag", e)
+            try {
+                registerReceiver(screenReceiver, filter)
+                screenReceiverRegistered = true
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback registrazione screenReceiver fallito", e2)
+            }
+        }
     }
 
     private fun startForegroundNotification() {
