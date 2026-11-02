@@ -1,10 +1,10 @@
 # Smart Charger
 
-Controllo automatico di dispositivi Sonoff basato sulla percentuale della batteria del telefono.
+Controllo automatico di dispositivi Sonoff basato sulla percentuale della batteria del telefono, con telemetria completa stile AccuBattery.
 
 ## Installazione rapida
 
-Scarica l'ultima release APK dalla sezione [Releases](https://github.com/FilippoAutiero007/Smart-Charger/releases) e installala sul tuo dispositivo Android.
+Scarica l'ultima release APK (attuale: **VoltGuard Pro v2.6**) dalla sezione [Releases](https://github.com/FilippoAutiero007/Smart-Charger/releases) e installala sul tuo dispositivo Android. Gli APK più recenti sono anche presenti nella root del repository (`VoltGuard-Pro-v2.6-release.apk`).
 
 ## Architettura
 
@@ -12,6 +12,11 @@ Scarica l'ultima release APK dalla sezione [Releases](https://github.com/Filippo
 Smart-Charger/
 ├── auth-server/          # Backend per login automatico via email (Node.js + Express)
 ├── monitor-batteria/     # App Android VoltGuard Pro (Kotlin + Jetpack Compose)
+│   └── app/src/main/java/com/example/
+│       ├── battery/          # Service in foreground, monitor batteria, sticky intent
+│       ├── battery/engine/   # BatteryTelemetryEngine + StandbyTracker (metriche/health)
+│       ├── data/             # Repository + Room (sessioni carica, campioni scarica)
+│       └── ui/               # Compose: schermate, gauge, grafici, navigation
 ├── index.js              # Server OAuth locale (Koa + eWeLink API)
 ├── config.js             # Configurazione eWeLink
 ├── sonoffControl.js      # CLI per controllo manuale Sonoff
@@ -25,12 +30,32 @@ L'app Android **VoltGuard Pro** monitora la batteria del telefono e comanda un d
 - **Batteria ≤ soglia ON** → Sonoff si **ACCENDE**
 - **Batteria ≥ soglia OFF** → Sonoff si **SPEGNE**
 
+Un servizio in foreground (`BatteryMonitorService`, `START_STICKY`) legge lo stato della batteria in tempo reale tramite sticky intent `ACTION_BATTERY_CHANGED`, così l'automazione resta attiva anche a schermo spento.
+
 Utile per caricabatterie smart, power bank, o qualsiasi dispositivo vada attivato in base al livello della batteria.
+
+## Funzionalità dell'app (v2.6)
+
+Quattro tab con **Salute** come schermata predefinita:
+
+| Tab | Contenuto |
+|-----|-----------|
+| **Salute** | Indicatore radiale stato batteria, metriche live (stato dispositivo, ciclo/vita, standby) |
+| **Carica** | Tachimetro batteria, metriche (W, mA, temperatura, tempo), grafico tendenza orario, log evento |
+| **Scarica** | Analisi della scarica: drain per app/schermo, campioni storici |
+| **Automazione** | Accoppiamento eWeLink & Sonoff (cloud o LAN), selezione dispositivo, test comandi, soglie ON/OFF, allarmi e notifiche |
+
+Inoltre:
+
+- **Telemetria stile AccuBattery**: normalizzazione corrente (uA/mA e polarità OEM), potenza in Watt, temperatura, stime vita batteria (`BatteryTelemetryEngine`)
+- **Persistenza Room**: sessioni di carica e campioni di scarica salvati localmente
+- **Grafico tendenza**: storico batteria nelle ultime ore (orientamento landscape supportato)
+- **Accoppiamento reale eWeLink/Sonoff**: login cloud o LAN, pairing dispositivo e test presa dall'app
 
 ## Configurazione rapida (via email)
 
 1. Avvia il server di autenticazione (su Render o locale)
-2. Nell'app: **Opzioni → Controllo Sonoff → Configurazione Automatica via Email**
+2. Nell'app: **Automazione → Accoppiamento eWeLink & Sonoff → Configurazione Automatica via Email**
 3. Inserisci la tua email → ricevi un link di login
 4. Clicca il link, autorizza l'app, ti verrà mostrato un codice a 5 cifre
 5. Inserisci il codice nell'app → tutto configurato automaticamente
@@ -41,7 +66,7 @@ Utile per caricabatterie smart, power bank, o qualsiasi dispositivo vada attivat
 2. Apri `http://localhost:8000/login` nel browser
 3. Fai login con le credenziali eWeLink
 4. I token vengono salvati in `token.json`
-5. Copia `accessToken` e `refreshToken` nell'app (Opzioni → Controllo Sonoff)
+5. Copia `accessToken` e `refreshToken` nell'app (Automazione → Controllo Sonoff)
 6. Inserisci l'ID del dispositivo Sonoff e le soglie
 
 ## Deploy del server di autenticazione
@@ -63,18 +88,36 @@ Il server `auth-server/` può essere deployato su [Render.com](https://render.co
 |-----------|-------------|
 | `APP_ID` | App ID da https://dev.ewelink.cc |
 | `APP_SECRET` | App Secret da https://dev.ewelink.cc |
-| `RESEND_API_KEY` | API key di Resend per l'invio email |
 | `BASE_URL` | URL pubblico del server (es. https://tuo-app.onrender.com) |
-| `FROM_EMAIL` | Mittente email (es. onboarding@resend.dev) |
+| `PORT` | Porta del server (default 3000) |
+
+Email (una delle due opzioni):
+
+| Variabile | Descrizione |
+|-----------|-------------|
+| `GMAIL_USER` | Account Gmail mittente (consigliato su Render) |
+| `GMAIL_APP_PASSWORD` | App Password di Google a 16 caratteri |
+| `MAIL_FROM_NAME` | Nome visualizzato nell'email (es. VoltGuard Pro) |
+| `RESEND_API_KEY` | Alternativa: API key di Resend |
+| `FROM_EMAIL` | Mittente custom con dominio verificato (solo Resend) |
+
+Opzionali:
+
+| Variabile | Descrizione |
+|-----------|-------------|
+| `CRON_SECRET` | Secret per il cron manuale `POST /_cron/renewals` |
+
+Nota: il rinnovo automatico dei token (ogni ~25 giorni, 5 giorni prima della scadenza) è gestito via API `/subscribe-renewal` senza variabili aggiuntive.
 
 ## Build APK (sviluppatori)
 
 ```bash
 cd monitor-batteria
-./gradlew assembleDebug
+./gradlew assembleDebug     # debug
+./gradlew assembleRelease   # release (usa debug.keystore di fallback se non configurato)
 ```
 
-L'APK si trova in `app/build/outputs/apk/debug/app-debug.apk`.
+Gli APK si trovano in `monitor-batteria/app/build/outputs/apk/{debug,release}/`.
 
 ## Requisiti
 
