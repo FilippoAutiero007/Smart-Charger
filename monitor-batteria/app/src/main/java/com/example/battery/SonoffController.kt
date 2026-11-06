@@ -34,7 +34,7 @@ class SonoffController(private val context: Context) {
         const val KEY_RENEWAL_LAST_STATUS = "sonoff_renewal_last_status"
 
         const val KEY_APP_ID = "sonoff_dynamic_app_id"
-        private const val DEFAULT_APP_ID = "lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo"
+        private const val DEFAULT_APP_ID = "SCsgZWXTjQexBjOWRcxoFNO0cR0mubZ1"
         const val AUTH_SERVER_URL = "https://auth-server-hnlj.onrender.com"
     }
 

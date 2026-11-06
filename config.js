@@ -6,8 +6,8 @@ import eWeLink from 'ewelink-api-next'
 // Create an application
 
 const _config = {
-  appId: 'lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo',
-  appSecret: 'mdPR25XfesDAiaB3pQbxWEklWT1EeK7v',
+  appId: 'SCsgZWXTjQexBjOWRcxoFNO0cR0mubZ1',
+  appSecret: 'jFKMccmdu3lkxmfRycGjMIr2daKgLHTJ',
   region: 'eu',
   requestRecord: true,
 }

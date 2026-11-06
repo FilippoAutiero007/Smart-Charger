@@ -17,8 +17,8 @@ app.use(express.json())
 
 const PORT = process.env.PORT || 3000
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`
-const APP_ID = process.env.APP_ID
-const APP_SECRET = process.env.APP_SECRET
+const APP_ID = process.env.APP_ID || 'SCsgZWXTjQexBjOWRcxoFNO0cR0mubZ1'
+const APP_SECRET = process.env.APP_SECRET || 'jFKMccmdu3lkxmfRycGjMIr2daKgLHTJ'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const BREVO_API_KEY = process.env.BREVO_API_KEY
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
@@ -864,9 +864,9 @@ app.post('/_cron/renewals', async (req, res) => {
 
 app.get('/app-config', (req, res) => {
   res.json({
-    appId: APP_ID || 'lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo',
+    appId: APP_ID || 'SCsgZWXTjQexBjOWRcxoFNO0cR0mubZ1',
     baseUrl: BASE_URL,
-    version: 'v12-ewelink-error-detail',
+    version: 'v12-ewelink-active',
   })
 })
 
