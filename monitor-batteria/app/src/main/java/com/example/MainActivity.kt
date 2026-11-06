@@ -1740,7 +1740,7 @@ fun SonoffDeviceSection() {
                                                     }
                                                     val body = json.toString().toRequestBody("application/json".toMediaType())
                                                     val request = Request.Builder()
-                                                        .url("$serverUrl/request-login")
+                                                        .url("${serverUrl.trim().trimEnd('/')}/request-login")
                                                         .post(body)
                                                         .build()
                                                     val response = client.newCall(request).execute()
@@ -1787,7 +1787,7 @@ fun SonoffDeviceSection() {
                                 ) {
                                     OutlinedTextField(
                                         value = authCode,
-                                        onValueChange = { authCode = it },
+                                        onValueChange = { authCode = it.filter(Char::isDigit).take(5) },
                                         label = { Text("Codice 5 cifre") },
                                         singleLine = true,
                                         modifier = Modifier.weight(1f),
@@ -1800,76 +1800,118 @@ fun SonoffDeviceSection() {
                                     )
                                     Button(
                                         onClick = {
+                                            val codeToCheck = authCode.trim()
+                                            if (!codeToCheck.matches(Regex("^\\d{5}$"))) {
+                                                emailStatus = "Inserisci un codice valido di 5 cifre."
+                                                return@Button
+                                            }
                                             emailStatus = "Verifica in corso..."
                                             Thread {
                                                 try {
                                                     val client = OkHttpClient.Builder()
-                                                        .connectTimeout(60, TimeUnit.SECONDS)
-                                                        .readTimeout(60, TimeUnit.SECONDS)
+                                                        .connectTimeout(30, TimeUnit.SECONDS)
+                                                        .readTimeout(30, TimeUnit.SECONDS)
                                                         .build()
+                                                    val baseUrl = serverUrl.trim().trimEnd('/')
                                                     val request = Request.Builder()
-                                                        .url("$serverUrl/check-code/$authCode")
+                                                        .url("$baseUrl/check-code/$codeToCheck")
                                                         .build()
                                                     val response = client.newCall(request).execute()
+                                                    if (!response.isSuccessful) {
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            emailStatus = "Server non disponibile (HTTP ${response.code}). Riprova."
+                                                        }
+                                                        return@Thread
+                                                    }
                                                     val body = response.body?.string() ?: "{}"
                                                     val result = JSONObject(body)
                                                     val status = result.optString("status", "not_found")
                                                     if (status == "completed") {
-                                                        val newAccessToken = result.getString("accessToken")
-                                                        val newRefreshToken = result.getString("refreshToken")
+                                                        val newAccessToken = result.optString("accessToken", "")
+                                                        val newRefreshToken = result.optString("refreshToken", "")
+                                                        if (newAccessToken.isBlank() || newRefreshToken.isBlank()) {
+                                                            Handler(Looper.getMainLooper()).post {
+                                                                emailStatus = "Token mancanti dal server. Richiedi un nuovo codice."
+                                                            }
+                                                            return@Thread
+                                                        }
                                                         val newRegion = result.optString("region", "eu")
                                                         val atExpiry = result.optLong("atExpiryTime", System.currentTimeMillis() + 2592000000L)
                                                         val rtExpiry = result.optLong("rtExpiryTime", System.currentTimeMillis() + 5184000000L)
-                                                        emailStatus = "Token ricevuti! Carico dispositivi..."
-
-                                                        val deviceRequest = Request.Builder()
-                                                            .url("$serverUrl/devices?accessToken=$newAccessToken&region=$newRegion")
-                                                            .build()
-                                                        val deviceResponse = client.newCall(deviceRequest).execute()
-                                                        val deviceBody = deviceResponse.body?.string() ?: "[]"
-                                                        val devices = JSONArray(deviceBody)
 
                                                         Handler(Looper.getMainLooper()).post {
                                                             accessToken = newAccessToken
                                                             refreshToken = newRefreshToken
                                                             region = newRegion
                                                             sonoffPrefs.edit()
+                                                                .putString(SonoffController.KEY_ACCESS_TOKEN, newAccessToken)
+                                                                .putString(SonoffController.KEY_REFRESH_TOKEN, newRefreshToken)
+                                                                .putString(SonoffController.KEY_REGION, newRegion)
                                                                 .putLong(SonoffController.KEY_AT_EXPIRY, atExpiry)
                                                                 .putLong(SonoffController.KEY_RT_EXPIRY, rtExpiry)
-                                                                .putString(SonoffController.KEY_DEVICE_LIST, deviceBody)
                                                                 .apply()
-                                                            // heartbeat rinnovo se attivo
-                                                            try {
-                                                                if (sonoffPrefs.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)) {
-                                                                    Thread {
-                                                                        try {
-                                                                            val c = SonoffController(context)
-                                                                            // aggiorna atExpiry appena salvato
-                                                                            c.syncRenewalSubscription()
-                                                                        } catch (_: Exception) {}
-                                                                    }.start()
-                                                                }
-                                                            } catch (_: Exception) {}
-                                                            if (devices.length() > 0) {
-                                                                val firstDevice = devices.getJSONObject(0)
-                                                                deviceId = firstDevice.optString("deviceid", "")
-                                                                emailStatus = "OK: ${devices.length()} dispositivi trovati!"
-                                                            } else {
-                                                                emailStatus = "Token OK, nessun dispositivo trovato"
+                                                            emailStatus = "Token ricevuti! Carico dispositivi..."
+                                                        }
+
+                                                        try {
+                                                            val deviceRequest = Request.Builder()
+                                                                .url("$baseUrl/devices?accessToken=${Uri.encode(newAccessToken)}&region=$newRegion")
+                                                                .build()
+                                                            val deviceResponse = client.newCall(deviceRequest).execute()
+                                                            val deviceBody = deviceResponse.body?.string() ?: "[]"
+                                                            if (!deviceResponse.isSuccessful) {
+                                                                throw IllegalStateException("HTTP ${deviceResponse.code}: $deviceBody")
                                                             }
-                                                            showEmailLogin = false
+                                                            val devices = JSONArray(deviceBody)
+
+                                                            Handler(Looper.getMainLooper()).post {
+                                                                sonoffPrefs.edit()
+                                                                    .putString(SonoffController.KEY_DEVICE_LIST, deviceBody)
+                                                                    .apply()
+                                                                // heartbeat rinnovo se attivo
+                                                                try {
+                                                                    if (sonoffPrefs.getBoolean(SonoffController.KEY_RENEWAL_ENABLED, false)) {
+                                                                        Thread {
+                                                                            try {
+                                                                                val c = SonoffController(context)
+                                                                                // aggiorna atExpiry appena salvato
+                                                                                c.syncRenewalSubscription()
+                                                                            } catch (_: Exception) {}
+                                                                        }.start()
+                                                                    }
+                                                                } catch (_: Exception) {}
+                                                                if (devices.length() > 0) {
+                                                                    val firstDevice = devices.getJSONObject(0)
+                                                                    deviceId = firstDevice.optString("deviceid", "")
+                                                                    emailStatus = "OK: ${devices.length()} dispositivi trovati!"
+                                                                } else {
+                                                                    emailStatus = "OK: token salvati, nessun dispositivo trovato"
+                                                                }
+                                                                showEmailLogin = false
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            Handler(Looper.getMainLooper()).post {
+                                                                emailStatus = "OK: token salvati, ma caricamento dispositivi non riuscito. Riprova con 'Carica dispositivi'."
+                                                                showEmailLogin = false
+                                                            }
                                                         }
                                                     } else if (status == "pending") {
-                                                        emailStatus = "In attesa. Apri la mail e autorizza."
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            emailStatus = "In attesa. Apri il link e autorizza, poi premi di nuovo Verifica."
+                                                        }
                                                     } else {
-                                                        emailStatus = "Codice non valido. Richiedi uno nuovo."
+                                                        Handler(Looper.getMainLooper()).post {
+                                                            emailStatus = "Codice non valido o scaduto. Richiedi un nuovo link."
+                                                        }
                                                     }
                                                 } catch (e: Exception) {
-                                                    emailStatus = "Verifica fallita. Riprova."
+                                                    Handler(Looper.getMainLooper()).post {
+                                                        emailStatus = "Verifica fallita: ${e.message ?: "errore di rete"}. Riprova."
+                                                    }
                                                 }
                                             }.start()
                                         },
-                                        enabled = authCode.length >= 5,
+                                        enabled = authCode.trim().length >= 5,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = com.example.ui.theme.GreenHealthy
                                         ),
@@ -1937,7 +1979,7 @@ fun SonoffDeviceSection() {
                                                     val json = JSONObject().apply { put("email", email) }
                                                     val body = json.toString().toRequestBody("application/json".toMediaType())
                                                     val request = Request.Builder()
-                                                        .url("$serverUrl/test-mail")
+                                                        .url("${serverUrl.trim().trimEnd('/')}/test-mail")
                                                         .post(body)
                                                         .build()
                                                     val response = client.newCall(request).execute()
@@ -1987,8 +2029,9 @@ fun SonoffDeviceSection() {
                                             .connectTimeout(60, TimeUnit.SECONDS)
                                             .readTimeout(60, TimeUnit.SECONDS)
                                             .build()
+                                        val baseUrl = serverUrl.trim().trimEnd('/')
                                         val request = Request.Builder()
-                                            .url("$serverUrl/devices?accessToken=$accessToken&region=$region")
+                                            .url("$baseUrl/devices?accessToken=${Uri.encode(accessToken)}&region=$region")
                                             .build()
                                         val response = client.newCall(request).execute()
                                         val body = response.body?.string() ?: "[]"
