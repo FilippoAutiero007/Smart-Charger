@@ -20,65 +20,116 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`
 const APP_ID = process.env.APP_ID
 const APP_SECRET = process.env.APP_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ewelink-auth.com'
-const GMAIL_USER = process.env.GMAIL_USER
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.replace(/\s/g, '') : null
-const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'VoltGuard Pro'
+const BREVO_API_KEY = process.env.BREVO_API_KEY
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
+const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587
+const SMTP_USER = process.env.SMTP_USER
+const SMTP_PASS = process.env.SMTP_PASS
+const SMTP_SECURE = process.env.SMTP_SECURE === 'true'
+const FROM_EMAIL = process.env.FROM_EMAIL || null
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'VoltGuard Pro'
 const MAIL_FROM = process.env.MAIL_FROM || null
+const GMAIL_USER = process.env.GMAIL_USER || null
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.replace(/\s/g, '') : null
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
 
 function buildGmailFrom() {
   return `"${MAIL_FROM_NAME}" <${GMAIL_USER}>`
 }
+function buildSmtpFrom() {
+  if (MAIL_FROM) return MAIL_FROM
+  const addr = FROM_EMAIL || SMTP_USER
+  if (!addr) return `"${MAIL_FROM_NAME}" <noreply@localhost>`
+  return `"${MAIL_FROM_NAME}" <${addr}>`
+}
 function buildResendFrom() {
   if (MAIL_FROM) return MAIL_FROM
-  // Resend requires verified domain, use FROM_EMAIL
   if (FROM_EMAIL && FROM_EMAIL.includes('@')) return `${MAIL_FROM_NAME} <${FROM_EMAIL}>`
-  return `"${MAIL_FROM_NAME}" <${GMAIL_USER || 'noreply@voltguard.app'}>`
+  return `${MAIL_FROM_NAME} <${SMTP_USER || 'noreply@voltguard.app'}>`
 }
 function buildFromAddress() {
   if (MAIL_FROM) return MAIL_FROM
-  return `"${MAIL_FROM_NAME}" <${GMAIL_USER || FROM_EMAIL}>`
+  return `"${MAIL_FROM_NAME}" <${GMAIL_USER || FROM_EMAIL || SMTP_USER || 'noreply@localhost'}>`
 }
 
+let smtpTransporter = null
+let smtpVerifyOk = false
+let smtpActivePort = SMTP_PORT
+
+function createSmtpTransport(port) {
+  const secure = SMTP_SECURE || port === 465
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port,
+    secure,
+    requireTLS: !secure,
+    auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  })
+}
+
+if (SMTP_USER && SMTP_PASS) {
+  smtpTransporter = createSmtpTransport(SMTP_PORT)
+  smtpTransporter.verify().then(() => {
+    smtpVerifyOk = true
+    console.log(`[smtp] transporter verificato per ${MAIL_FROM_NAME} via ${SMTP_HOST}:${SMTP_PORT}`)
+  }).catch(err => {
+    console.error(`[smtp] verifica ${SMTP_PORT} fallita:`, err.message, err.code || '')
+    // Fallback: 587->2525 (Brevo) oppure 465 SSL
+    const altPort = SMTP_PORT === 587 ? 2525 : 465
+    console.log(`[smtp] tentativo fallback porta ${altPort} ...`)
+    const alt = createSmtpTransport(altPort)
+    alt.verify().then(() => {
+      console.log(`[smtp] fallback porta ${altPort} OK, sostituisco transporter`)
+      smtpTransporter = alt
+      smtpActivePort = altPort
+      smtpVerifyOk = true
+    }).catch(err2 => {
+      console.error(`[smtp] fallback porta ${altPort} fallito:`, err2.message, err2.code || '')
+      console.error(`[smtp] suggerimento: verifica SMTP_USER/SMTP_PASS (SMTP key Brevo) e mittente verificato`)
+    })
+  })
+}
+
+// Gmail SMTP (App Password) — mittente reale Gmail, migliore consegna verso Gmail
 let gmailTransporter = null
 let gmailVerifyOk = false
-if (GMAIL_USER && GMAIL_APP_PASSWORD) {
-  gmailTransporter = nodemailer.createTransport({
+let gmailActivePort = 587
+
+function createGmailTransport(port) {
+  const secure = port === 465
+  return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    requireTLS: true,
+    port,
+    secure,
+    requireTLS: !secure,
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
-    tls: { ciphers: 'SSLv3' },
   })
+}
+
+if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+  gmailTransporter = createGmailTransport(587)
   gmailTransporter.verify().then(() => {
     gmailVerifyOk = true
-    console.log(`[gmail] transporter verificato per ${MAIL_FROM_NAME} <${GMAIL_USER}> via smtp.gmail.com:587`)
+    console.log(`[gmail] transporter verificato per ${GMAIL_USER} via smtp.gmail.com:587`)
   }).catch(err => {
-    console.error(`[gmail] verifica 587 fallita per ${GMAIL_USER}:`, err.message, err.code || '')
-    // Try fallback port 465
-    console.log(`[gmail] tentativo fallback port 465 secure:true ...`)
-    const alt = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    })
+    console.error(`[gmail] verifica 587 fallita:`, err.message, err.code || '')
+    console.log('[gmail] tentativo fallback porta 465 secure ...')
+    const alt = createGmailTransport(465)
     alt.verify().then(() => {
-      console.log(`[gmail] fallback 465 OK, sostituisco transporter`)
+      console.log('[gmail] fallback 465 OK, sostituisco transporter')
       gmailTransporter = alt
+      gmailActivePort = 465
       gmailVerifyOk = true
     }).catch(err2 => {
-      console.error(`[gmail] fallback 465 fallito:`, err2.message)
-      console.error(`[gmail] suggerimento: verifica App Password (16 char, spazi rimossi) e 2FA attivo su myaccount.google.com/apppasswords`)
+      console.error('[gmail] fallback 465 fallito:', err2.message, err2.code || '')
+      console.error('[gmail] suggerimento: verifica GMAIL_APP_PASSWORD (16 caratteri, 2FA attiva)')
     })
   })
 }
@@ -153,6 +204,39 @@ setInterval(() => {
 
 // Unified mail sender with fallback and timeout
 async function sendEmail({ to, subject, html, text }) {
+  const textBody = text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+
+  const attemptBrevoApi = async () => {
+    if (!BREVO_API_KEY) return { success: false, error: 'brevo api not configured' }
+    const from = FROM_EMAIL || SMTP_USER
+    if (!from || !from.includes('@')) return { success: false, error: 'from email non configurata' }
+    const resp = await Promise.race([
+      fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: MAIL_FROM_NAME, email: from },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: textBody,
+        }),
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout Brevo API 12s')), 12000))
+    ])
+    const data = await resp.json().catch(() => ({}))
+    if (!resp.ok) {
+      throw new Error(`Brevo API ${resp.status}: ${data.message || JSON.stringify(data)}`)
+    }
+    const id = data.messageId || 'ok'
+    console.log(`[email-brevo] inviata a ${to} from=${from} id=${id}`)
+    return { success: true, mailer: 'brevo', messageId: id, from }
+  }
+
   const attemptGmail = async () => {
     if (!gmailTransporter) return { success: false, error: 'gmail not configured' }
     const from = buildGmailFrom()
@@ -162,13 +246,31 @@ async function sendEmail({ to, subject, html, text }) {
         to,
         subject,
         html,
-        text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+        text: textBody,
         headers: { 'X-Mailer': 'VoltGuard Pro' },
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout SMTP 12s')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout Gmail ${gmailActivePort}`)), 12000))
     ])
     console.log(`[email-gmail] inviata a ${to} from=${from} messageId=${info.messageId}`)
     return { success: true, mailer: 'gmail', messageId: info.messageId, from }
+  }
+
+  const attemptSmtp = async () => {
+    if (!smtpTransporter) return { success: false, error: 'smtp not configured' }
+    const from = buildSmtpFrom()
+    const info = await Promise.race([
+      smtpTransporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        text: textBody,
+        headers: { 'X-Mailer': 'VoltGuard Pro' },
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout SMTP ${smtpActivePort}`)), 12000))
+    ])
+    console.log(`[email-smtp] inviata a ${to} from=${from} messageId=${info.messageId}`)
+    return { success: true, mailer: 'smtp', messageId: info.messageId, from }
   }
 
   const attemptResend = async () => {
@@ -185,37 +287,29 @@ async function sendEmail({ to, subject, html, text }) {
     return { success: true, mailer: 'resend', messageId: id, from }
   }
 
-  // Try Gmail first (preferred) then Resend fallback
-  let lastError = null
-  if (gmailTransporter) {
-    try {
-      const r = await attemptGmail()
-      if (r.success) return r
-    } catch (e) {
-      lastError = e.message
-      console.error(`[email-gmail] errore a ${to}:`, e.message, e.code || '')
-      // try resend fallback
-      if (resend) {
-        try {
-          const r2 = await attemptResend()
-          if (r2.success) return r2
-        } catch (e2) {
-          lastError = e2.message
-          console.error(`[email-resend-fallback] errore:`, e2.message)
-        }
-      }
-    }
-  } else if (resend) {
-    try {
-      const r = await attemptResend()
-      if (r.success) return r
-    } catch (e) {
-      lastError = e.message
-      console.error(`[email-resend] errore a ${to}:`, e.message)
-    }
-  } else {
-    lastError = 'nessun mailer configurato (GMAIL_USER/GMAIL_APP_PASSWORD o RESEND_API_KEY mancanti)'
+  const attempts = []
+  if (gmailTransporter && gmailVerifyOk) attempts.push(['gmail', attemptGmail])
+  if (smtpTransporter && smtpVerifyOk) attempts.push(['smtp', attemptSmtp])
+  if (BREVO_API_KEY) attempts.push(['brevo', attemptBrevoApi])
+  if (gmailTransporter && !gmailVerifyOk) attempts.push(['gmail', attemptGmail])
+  if (smtpTransporter && !smtpVerifyOk) attempts.push(['smtp', attemptSmtp])
+  if (resend) attempts.push(['resend', attemptResend])
+
+  if (attempts.length === 0) {
+    const error = 'nessun mailer configurato (GMAIL_USER/GMAIL_APP_PASSWORD, BREVO_API_KEY, SMTP_USER/SMTP_PASS o RESEND_API_KEY mancanti)'
     console.log(`[email-none] nessun transporter, simulo invio a ${to}`)
+    return { success: false, mailer: 'none', error }
+  }
+
+  let lastError = null
+  for (const [name, attempt] of attempts) {
+    try {
+      const r = await attempt()
+      if (r.success) return r
+    } catch (e) {
+      lastError = e.message
+      console.error(`[email-${name}] errore a ${to}:`, e.message, e.code || '')
+    }
   }
 
   // All failed
@@ -382,7 +476,7 @@ app.post('/test-mail', async (req, res) => {
         <p style="color: #666; font-size: 13px;">Inviata il ${new Date().toLocaleString('it-IT')} da ${buildFromAddress()}</p>
         <p style="color: #888; font-size: 12px;">Se la ricevi, la configurazione email è corretta (mittente: ${MAIL_FROM_NAME}).</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;"/>
-        <p style="color: #aaa; font-size: 11px;">Server: ${BASE_URL} — versione v9-renewal</p>
+        <p style="color: #aaa; font-size: 11px;">Server: ${BASE_URL} — versione v11-check-code-retry</p>
       </div>
     `
     const testText = `VoltGuard Pro - Test Mail OK\nInviata il ${new Date().toLocaleString('it-IT')} da ${buildFromAddress()}\nSe la ricevi, configurazione OK. Server ${BASE_URL}`
@@ -390,11 +484,11 @@ app.post('/test-mail', async (req, res) => {
     if (result.success) {
       return res.json({ success: true, mailer: result.mailer, from: result.from, messageId: result.messageId })
     } else {
-      return res.status(500).json({ success: false, mailer: result.mailer || 'none', error: result.error, hint: 'Verifica GMAIL_APP_PASSWORD (16 char), 2FA attivo, e che la mail non sia in spam' })
+      return res.status(500).json({ success: false, mailer: result.mailer || 'none', error: result.error, hint: 'Verifica SMTP_USER/SMTP_PASS (SMTP key Brevo), mittente verificato e che la mail non sia in spam' })
     }
   } catch (err) {
     console.error('test-mail error:', err.message, err.code || '', err.response || '')
-    return res.status(500).json({ success: false, error: err.message + (err.code ? ` (code ${err.code})` : ''), hint: 'Verifica GMAIL_APP_PASSWORD (16 char), 2FA attivo, e che la mail non sia in spam' })
+    return res.status(500).json({ success: false, error: err.message + (err.code ? ` (code ${err.code})` : ''), hint: 'Verifica SMTP_USER/SMTP_PASS (SMTP key Brevo), mittente verificato e che la mail non sia in spam' })
   }
 })
 
@@ -440,13 +534,20 @@ app.get('/callback', async (req, res) => {
 
     tokenResult.region = region || 'eu'
 
+    const tokenData = tokenResult?.data || {}
+    if (!tokenData.accessToken || !tokenData.refreshToken) {
+      console.error(`[callback] token eWeLink mancanti per code=${foundCode}:`, JSON.stringify(tokenResult))
+      pendingLogins.delete(foundCode)
+      return res.status(502).send('<h3>Autorizzazione eWeLink non riuscita (token mancanti). Richiedi un nuovo codice dall\'app.</h3>')
+    }
+
     // Persist renewal info if email associated
     const pending = pendingLogins.get(foundCode)
     const emailKey = pending?.email ? pending.email.toLowerCase().trim() : null
     if (emailKey && renewalSubscriptions.has(emailKey)) {
       const sub = renewalSubscriptions.get(emailKey)
-      sub.atExpiry = tokenResult.data.atExpiredTime || (Date.now() + 2592000000)
-      sub.rtExpiry = tokenResult.data.rtExpiredTime || (Date.now() + 5184000000)
+      sub.atExpiry = tokenData.atExpiredTime || (Date.now() + 2592000000)
+      sub.rtExpiry = tokenData.rtExpiredTime || (Date.now() + 5184000000)
       sub.region = tokenResult.region
       sub.updatedAt = Date.now()
       // lastRenewalSent set only if this was a renewal type, but update anyway
@@ -460,10 +561,10 @@ app.get('/callback', async (req, res) => {
 
     completedLogins.set(foundCode, {
       region: tokenResult.region,
-      accessToken: tokenResult.data.accessToken,
-      refreshToken: tokenResult.data.refreshToken,
-      atExpiryTime: tokenResult.data.atExpiredTime,
-      rtExpiryTime: tokenResult.data.rtExpiredTime,
+      accessToken: tokenData.accessToken,
+      refreshToken: tokenData.refreshToken,
+      atExpiryTime: tokenData.atExpiredTime,
+      rtExpiryTime: tokenData.rtExpiredTime,
       status: 'completed',
       completedAt: Date.now(),
       email: pending?.email || null,
@@ -503,11 +604,14 @@ app.get('/callback', async (req, res) => {
 })
 
 app.get('/check-code/:code', (req, res) => {
-  const { code } = req.params
+  const code = String(req.params.code || '').trim()
 
   if (completedLogins.has(code)) {
     const data = completedLogins.get(code)
-    completedLogins.delete(code)
+    // NON eliminare qui: la verifica deve essere ripetibile (es. se il caricamento
+    // dispositivi fallisce lato app il codice deve restare valido fino alla TTL).
+    // La pulizia avviene nel cleanup periodico dopo 30 minuti.
+    console.log(`[check-code] code=${code} consegnato (retry ok)`)
     return res.json(data)
   }
 
@@ -520,7 +624,8 @@ app.get('/check-code/:code', (req, res) => {
 
 app.get('/devices', async (req, res) => {
   try {
-    const { accessToken, region } = req.query
+    const accessToken = String(req.query.accessToken || '').trim()
+    const { region } = req.query
     if (!accessToken) {
       return res.status(400).json({ error: 'accessToken richiesto' })
     }
@@ -533,6 +638,10 @@ app.get('/devices', async (req, res) => {
     userApi.at = accessToken
 
     const result = await userApi.device.getAllThings()
+    if (result?.error && result.error !== 0) {
+      console.error(`[devices] errore eWeLink ${result.error}: ${result.msg || ''}`)
+      return res.status(502).json({ error: result.msg || `Errore eWeLink ${result.error}` })
+    }
     const things = result?.data?.thingList || []
     const devices = things
       .filter(t => t.itemType === 1 || t.itemType === 2)
@@ -719,22 +828,37 @@ app.post('/_cron/renewals', async (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  const mailer = gmailTransporter ? `gmail:${MAIL_FROM_NAME}${gmailVerifyOk ? ':verified' : ':pending'}` : resend ? 'resend' : 'none'
+  const mailer = gmailTransporter && gmailVerifyOk ? `gmail:${MAIL_FROM_NAME}:verified`
+    : smtpTransporter && smtpVerifyOk ? `smtp:${MAIL_FROM_NAME}:verified`
+    : BREVO_API_KEY ? `brevo-api:${MAIL_FROM_NAME}`
+    : gmailTransporter ? `gmail:${MAIL_FROM_NAME}:pending`
+    : smtpTransporter ? `smtp:${MAIL_FROM_NAME}:pending`
+    : resend ? 'resend' : 'none'
+  const smtpConfigured = !!(SMTP_USER && SMTP_PASS)
   const gmailConfigured = !!(GMAIL_USER && GMAIL_APP_PASSWORD)
   const resendConfigured = !!RESEND_API_KEY
+  const brevoApiConfigured = !!BREVO_API_KEY
   res.json({
     status: 'ok',
     pending: pendingLogins.size,
     completed: completedLogins.size,
     subscriptions: renewalSubscriptions.size,
-    version: 'v9-renewal-fix',
+    version: 'v11-check-code-retry',
     mailer,
     gmailConfigured,
     gmailVerifyOk,
+    gmailHost: gmailConfigured ? 'smtp.gmail.com' : null,
+    gmailPort: gmailConfigured ? gmailActivePort : null,
+    gmailFrom: gmailConfigured ? buildGmailFrom() : null,
+    smtpConfigured,
+    smtpVerifyOk,
+    smtpHost: SMTP_HOST,
+    smtpPort: smtpActivePort,
     resendConfigured,
+    brevoApiConfigured,
     fromName: MAIL_FROM_NAME,
     fromAddr: buildFromAddress(),
-    gmailFrom: GMAIL_USER ? buildGmailFrom() : null,
+    smtpFrom: smtpConfigured ? buildSmtpFrom() : null,
     resendFrom: buildResendFrom(),
     baseUrl: BASE_URL,
     uptimeSec: Math.round(process.uptime()),
@@ -744,10 +868,11 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Auth server running at ${BASE_URL}`)
   console.log(`Health check: ${BASE_URL}/health`)
-  console.log(`Mailer From: ${gmailTransporter ? buildGmailFrom() : resend ? buildResendFrom() : 'none (console only)'}`)
-  if (gmailTransporter) console.log(`Mailer: Gmail via ${MAIL_FROM_NAME} (${GMAIL_USER}) verified=${gmailVerifyOk}`)
+  console.log(`Mailer From: ${gmailTransporter ? buildGmailFrom() : smtpTransporter ? buildSmtpFrom() : resend ? buildResendFrom() : 'none (console only)'}`)
+  if (gmailTransporter) console.log(`Mailer: Gmail SMTP smtp.gmail.com:${gmailActivePort} (${MAIL_FROM_NAME}) verified=${gmailVerifyOk}${smtpTransporter ? ' + Brevo SMTP fallback' : ''}${BREVO_API_KEY ? ' + Brevo API fallback' : ''}`)
+  else if (smtpTransporter) console.log(`Mailer: SMTP ${SMTP_HOST}:${smtpActivePort} (${MAIL_FROM_NAME}) verified=${smtpVerifyOk}${BREVO_API_KEY ? ' + Brevo API fallback' : ''}`)
+  else if (BREVO_API_KEY) console.log(`Mailer: Brevo API (${FROM_EMAIL || SMTP_USER})`)
   else if (resend) console.log(`Mailer: Resend via ${buildResendFrom()}`)
-  else console.warn('WARNING: nessun mailer configurato — GMAIL_USER/GMAIL_APP_PASSWORD o RESEND_API_KEY mancanti, email solo in console')
+  else console.warn('WARNING: nessun mailer configurato — GMAIL_USER/GMAIL_APP_PASSWORD, SMTP_USER/SMTP_PASS, BREVO_API_KEY o RESEND_API_KEY mancanti, email solo in console')
   console.log(`Renewal: ${renewalSubscriptions.size} subscriptions loaded, cron ogni 6h, TTL pending 15min`)
-  console.log('NOTE immagine profilo: rimuovila da https://myaccount.google.com/personal-info -> imposta nome "VoltGuard Pro" e foto neutra/generica')
 })
