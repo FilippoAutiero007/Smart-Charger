@@ -91,15 +91,35 @@ Il server `auth-server/` può essere deployato su [Render.com](https://render.co
 | `BASE_URL` | URL pubblico del server (es. https://tuo-app.onrender.com) |
 | `PORT` | Porta del server (default 3000) |
 
-Email (una delle due opzioni):
+Email — due opzioni (Gmail SMTP ha priorità se configurato, Brevo resta come fallback):
+
+**Opzione A — Gmail SMTP (mittente reale Gmail, consigliato per consegna verso Gmail):**
 
 | Variabile | Descrizione |
 |-----------|-------------|
-| `GMAIL_USER` | Account Gmail mittente (consigliato su Render) |
-| `GMAIL_APP_PASSWORD` | App Password di Google a 16 caratteri |
+| `GMAIL_USER` | Account Gmail mittente (deve avere la verifica in due passaggi attiva) |
+| `GMAIL_APP_PASSWORD` | App Password Google a 16 caratteri (spazi rimossi automaticamente) |
 | `MAIL_FROM_NAME` | Nome visualizzato nell'email (es. VoltGuard Pro) |
-| `RESEND_API_KEY` | Alternativa: API key di Resend |
-| `FROM_EMAIL` | Mittente custom con dominio verificato (solo Resend) |
+
+Setup Gmail: attiva la 2FA → https://myaccount.google.com/apppasswords → crea una App Password → copia le variabili sopra.
+
+**Opzione B — provider cloud SMTP (Brevo, free 300 mail/giorno, nessun dominio richiesto):**
+
+| Variabile | Descrizione |
+|-----------|-------------|
+| `SMTP_HOST` | Host SMTP (default `smtp-relay.brevo.com`) |
+| `SMTP_PORT` | Porta SMTP (default `587`; fallback automatico `2525`, oppure `465` con SSL) |
+| `SMTP_USER` | Login SMTP (Brevo: Settings → SMTP & API → SMTP key) |
+| `SMTP_PASS` | Password SMTP (la SMTP key generata, visibile una sola volta) |
+| `FROM_EMAIL` | Mittente: deve essere l'indirizzo verificato come sender su Brevo |
+| `MAIL_FROM_NAME` | Nome visualizzato nell'email (es. VoltGuard Pro) |
+| `MAIL_FROM` | Opzionale: envelope From completo con dominio verificato |
+| `RESEND_API_KEY` | Opzionale: fallback automatico a Resend se SMTP fallisce |
+
+Setup Brevo (5 minuti, no carta):
+1. Registrati su https://www.brevo.com
+2. **Settings → Senders → Add sender**: aggiungi il tuo indirizzo e verifica col codice a 6 cifre ricevuto via email (niente DNS)
+3. **Settings → SMTP & API → tab SMTP → Generate SMTP key** → copia username + key nelle variabili sopra
 
 Opzionali:
 
