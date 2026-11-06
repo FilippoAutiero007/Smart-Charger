@@ -535,9 +535,52 @@ app.get('/callback', async (req, res) => {
     tokenResult.region = region || 'eu'
 
     const tokenData = tokenResult?.data || {}
-    if (!tokenData.accessToken || !tokenData.refreshToken) {
+    const accessToken = tokenData.accessToken || tokenData.at || tokenResult?.accessToken || null
+    const refreshToken = tokenData.refreshToken || tokenData.rt || tokenResult?.refreshToken || null
+
+    if (tokenResult?.error && tokenResult.error !== 0) {
+      console.error(`[callback] errore eWeLink ${tokenResult.error}: ${tokenResult.msg} per code=${foundCode}:`, JSON.stringify(tokenResult))
+      const isExpired = tokenResult.error === 408 || String(tokenResult.msg || '').includes('expired')
+      return res.status(502).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Errore Autorizzazione eWeLink</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
+          .card { background: #1e293b; padding: 28px; border-radius: 16px; max-width: 420px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); border: 1px solid #334155; }
+          h2 { color: #f43f5e; margin-top: 0; font-size: 20px; }
+          .badge { display: inline-block; background: #e11d48; color: white; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: bold; margin-bottom: 12px; }
+          .info { background: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; line-height: 1.5; color: #cbd5e1; margin: 16px 0; }
+          a { color: #38bdf8; text-decoration: none; font-weight: 500; }
+          a:hover { text-decoration: underline; }
+          .btn { display: block; text-align: center; background: #6366f1; color: white; padding: 10px; border-radius: 8px; font-weight: bold; text-decoration: none; margin-top: 16px; }
+        </style>
+        </head>
+        <body>
+          <div class="card">
+            <span class="badge">Errore eWeLink ${tokenResult.error}</span>
+            <h2>Autorizzazione non riuscita</h2>
+            <p style="color: #94a3b8; font-size: 14px;">Il server eWeLink ha risposto: <b>${tokenResult.msg || 'token non rilasciati'}</b></p>
+            ${isExpired ? `
+              <div class="info">
+                <b style="color: #fca5a5;">⚠️ Causa: APP_ID scaduto</b><br>
+                La licenza dell'applicazione eWeLink su <a href="https://dev.ewelink.cc" target="_blank">dev.ewelink.cc</a> è scaduta.<br><br>
+                <b>Come risolvere:</b><br>
+                1. Accedi a <a href="https://dev.ewelink.cc" target="_blank">dev.ewelink.cc</a> con il tuo account eWeLink.<br>
+                2. Nella Console clicca su <b>Renew (Rinnova)</b> sull'app (o creane una nuova).<br>
+                3. Aggiorna <code>APP_ID</code> e <code>APP_SECRET</code> nelle variabili di Render.
+              </div>
+            ` : '<p style="color: #94a3b8; font-size: 13px;">Verifica le tue credenziali eWeLink e riprova.</p>'}
+            <a class="btn" href="/login?code=${foundCode}">Riprova con lo stesso codice</a>
+          </div>
+        </body>
+        </html>
+      `)
+    }
+
+    if (!accessToken || !refreshToken) {
       console.error(`[callback] token eWeLink mancanti per code=${foundCode}:`, JSON.stringify(tokenResult))
-      pendingLogins.delete(foundCode)
       return res.status(502).send('<h3>Autorizzazione eWeLink non riuscita (token mancanti). Richiedi un nuovo codice dall\'app.</h3>')
     }
 
@@ -561,10 +604,10 @@ app.get('/callback', async (req, res) => {
 
     completedLogins.set(foundCode, {
       region: tokenResult.region,
-      accessToken: tokenData.accessToken,
-      refreshToken: tokenData.refreshToken,
-      atExpiryTime: tokenData.atExpiredTime,
-      rtExpiryTime: tokenData.rtExpiredTime,
+      accessToken,
+      refreshToken,
+      atExpiryTime: tokenData.atExpiredTime || tokenData.atExpiryTime || (Date.now() + 2592000000),
+      rtExpiryTime: tokenData.rtExpiredTime || tokenData.rtExpiryTime || (Date.now() + 5184000000),
       status: 'completed',
       completedAt: Date.now(),
       email: pending?.email || null,
@@ -827,6 +870,14 @@ app.post('/_cron/renewals', async (req, res) => {
   res.json({ ok: true, count: renewalSubscriptions.size })
 })
 
+app.get('/app-config', (req, res) => {
+  res.json({
+    appId: APP_ID || 'lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo',
+    baseUrl: BASE_URL,
+    version: 'v12-ewelink-error-detail',
+  })
+})
+
 app.get('/health', (req, res) => {
   const mailer = gmailTransporter && gmailVerifyOk ? `gmail:${MAIL_FROM_NAME}:verified`
     : smtpTransporter && smtpVerifyOk ? `smtp:${MAIL_FROM_NAME}:verified`
@@ -843,7 +894,8 @@ app.get('/health', (req, res) => {
     pending: pendingLogins.size,
     completed: completedLogins.size,
     subscriptions: renewalSubscriptions.size,
-    version: 'v11-check-code-retry',
+    version: 'v12-ewelink-error-detail',
+    appIdConfigured: !!APP_ID,
     mailer,
     gmailConfigured,
     gmailVerifyOk,
