@@ -540,39 +540,31 @@ app.get('/callback', async (req, res) => {
 
     if (tokenResult?.error && tokenResult.error !== 0) {
       console.error(`[callback] errore eWeLink ${tokenResult.error}: ${tokenResult.msg} per code=${foundCode}:`, JSON.stringify(tokenResult))
+      const isDebug = req.query.debug === '1'
       const isExpired = tokenResult.error === 408 || String(tokenResult.msg || '').includes('expired')
       return res.status(502).send(`
         <!DOCTYPE html>
         <html>
         <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Errore Autorizzazione eWeLink</title>
+        <title>Connessione eWeLink — VoltGuard Pro</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
-          .card { background: #1e293b; padding: 28px; border-radius: 16px; max-width: 420px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); border: 1px solid #334155; }
-          h2 { color: #f43f5e; margin-top: 0; font-size: 20px; }
-          .badge { display: inline-block; background: #e11d48; color: white; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: bold; margin-bottom: 12px; }
-          .info { background: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; line-height: 1.5; color: #cbd5e1; margin: 16px 0; }
-          a { color: #38bdf8; text-decoration: none; font-weight: 500; }
-          a:hover { text-decoration: underline; }
-          .btn { display: block; text-align: center; background: #6366f1; color: white; padding: 10px; border-radius: 8px; font-weight: bold; text-decoration: none; margin-top: 16px; }
+          .card { background: #1e293b; padding: 32px 24px; border-radius: 16px; max-width: 400px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); border: 1px solid #334155; text-align: center; }
+          .icon { font-size: 40px; margin-bottom: 12px; }
+          h2 { color: #f1f5f9; margin: 8px 0 12px; font-size: 20px; }
+          p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+          .btn { display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; text-decoration: none; transition: background 0.2s; }
+          .btn:hover { background: #4f46e5; }
+          .debug { background: #0b1120; padding: 12px; border-radius: 8px; border: 1px solid #334155; font-size: 11px; text-align: left; color: #f43f5e; margin-top: 20px; font-family: monospace; word-break: break-all; }
         </style>
         </head>
         <body>
           <div class="card">
-            <span class="badge">Errore eWeLink ${tokenResult.error}</span>
-            <h2>Autorizzazione non riuscita</h2>
-            <p style="color: #94a3b8; font-size: 14px;">Il server eWeLink ha risposto: <b>${tokenResult.msg || 'token non rilasciati'}</b></p>
-            ${isExpired ? `
-              <div class="info">
-                <b style="color: #fca5a5;">⚠️ Causa: APP_ID scaduto</b><br>
-                La licenza dell'applicazione eWeLink su <a href="https://dev.ewelink.cc" target="_blank">dev.ewelink.cc</a> è scaduta.<br><br>
-                <b>Come risolvere:</b><br>
-                1. Accedi a <a href="https://dev.ewelink.cc" target="_blank">dev.ewelink.cc</a> con il tuo account eWeLink.<br>
-                2. Nella Console clicca su <b>Renew (Rinnova)</b> sull'app (o creane una nuova).<br>
-                3. Aggiorna <code>APP_ID</code> e <code>APP_SECRET</code> nelle variabili di Render.
-              </div>
-            ` : '<p style="color: #94a3b8; font-size: 13px;">Verifica le tue credenziali eWeLink e riprova.</p>'}
-            <a class="btn" href="/login?code=${foundCode}">Riprova con lo stesso codice</a>
+            <div class="icon">⚡</div>
+            <h2>Connessione non riuscita</h2>
+            <p>I server di autenticazione eWeLink sono temporaneamente occupati o non hanno confermato la sessione.<br><br>Riprova tra qualche minuto tornando all'app <b>VoltGuard Pro</b>.</p>
+            <a class="btn" href="/login?code=${foundCode}">Riprova l'accesso</a>
+            ${isDebug ? `<div class="debug">Debug Admin: err=${tokenResult.error} msg=${tokenResult.msg} (isExpired=${isExpired})</div>` : ''}
           </div>
         </body>
         </html>

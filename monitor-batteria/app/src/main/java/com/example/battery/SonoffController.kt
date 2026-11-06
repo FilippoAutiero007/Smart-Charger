@@ -33,8 +33,32 @@ class SonoffController(private val context: Context) {
         const val KEY_RENEWAL_LAST_SENT = "sonoff_renewal_last_sent"
         const val KEY_RENEWAL_LAST_STATUS = "sonoff_renewal_last_status"
 
-        private const val APP_ID = "lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo"
+        const val KEY_APP_ID = "sonoff_dynamic_app_id"
+        private const val DEFAULT_APP_ID = "lYPkZywzOtbxsMRNWJvhgCyXBDptIjOo"
         const val AUTH_SERVER_URL = "https://auth-server-hnlj.onrender.com"
+    }
+
+    fun getAppId(): String = prefs.getString(KEY_APP_ID, DEFAULT_APP_ID) ?: DEFAULT_APP_ID
+
+    fun syncAppConfigAsync() {
+        Thread {
+            try {
+                val req = Request.Builder()
+                    .url("$AUTH_SERVER_URL/app-config")
+                    .get()
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val body = resp.body?.string() ?: return@use
+                        val json = JSONObject(body)
+                        val remoteAppId = json.optString("appId", "")
+                        if (remoteAppId.isNotEmpty()) {
+                            prefs.edit().putString(KEY_APP_ID, remoteAppId).apply()
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }.start()
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -42,6 +66,10 @@ class SonoffController(private val context: Context) {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
+
+    init {
+        syncAppConfigAsync()
+    }
 
     private val regionUrls = mapOf(
         "eu" to "https://eu-apia.coolkit.cc",
@@ -315,7 +343,7 @@ class SonoffController(private val context: Context) {
             val requestBody = body.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder().url(url).post(requestBody)
                 .addHeader("Content-Type", "application/json")
-                .addHeader("X-CK-Appid", APP_ID)
+                .addHeader("X-CK-Appid", getAppId())
                 .apply { if (token != null) addHeader("Authorization", "Bearer $token") }
                 .build()
             Log.d(TAG, "apiPost: $url tokenLen=${token?.length ?: 0}")
@@ -335,7 +363,7 @@ class SonoffController(private val context: Context) {
         try {
             val request = Request.Builder().url(url).get()
                 .addHeader("Content-Type", "application/json")
-                .addHeader("X-CK-Appid", APP_ID)
+                .addHeader("X-CK-Appid", getAppId())
                 .addHeader("Authorization", "Bearer $token")
                 .build()
             Log.d(TAG, "apiGet: $url tokenLen=${token.length}")
